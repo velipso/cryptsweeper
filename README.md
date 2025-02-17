@@ -1,2 +1,4 @@
-# cryptsweeper
-Minesweeper clone
+Crypt Sweeper
+=============
+
+Inspired by [dragonsweeper](https://dragonsweeper.com/).

@@ -1,0 +1,56 @@
+VRAM
+====
+
+each row is 0x800 bytes (2k)
+32 8bit tiles per row
+256x256 map at every m
+tilesheet at every t
+
+00 m t  \
+01 m     |
+02 m     |
+03 m     |
+04 m     |
+05 m     |
+06 m     |
+07 m     |___ 512 tiles, main game (8bpp)
+08 m t   |
+09 m     |
+0a m     |
+0b m     |
+0c m     |
+0d m     |
+0e m     |
+0f m    /
+10 m t  \
+11 m     |
+12 m     |
+13 m     |
+14 m     |
+15 m     |___ 384 tiles, stat menu (8bpp)
+16 m     |
+17 m     |
+18 m t   |
+19 m     |
+1a m     |
+1b m    /
+1c m    >---- 256x256 map bg0
+1d m    >---- 256x256 map bg1
+1e m    >---- 256x256 map bg2
+1f m    >---- 256x256 map bg3
+20 x s  \
+21 x s   |
+22 x s   |
+23 x s   |
+24 x s   |
+25 x s   |
+26 x s   |
+27 x s   |___ 512 tiles (8bpp)
+28 x s   |
+29 x s   |
+2a x s   |
+2b x s   |
+2c x s   |
+2d x s   |
+2e x s   |
+2f x s  /

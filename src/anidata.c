@@ -170,3 +170,305 @@ const u16 ani_cursor4[] ={
   JUMP(-12),
   STOP()
 };
+
+const u16 ani_hpfull[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(0, 16),
+  STOP()
+};
+const u16 ani_hpempty[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(8, 16),
+  STOP()
+};
+const u16 ani_hp0[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(16, 0),
+  STOP()
+};
+const u16 ani_hp1[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(24, 0),
+  STOP()
+};
+const u16 ani_hp2[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(32, 0),
+  STOP()
+};
+const u16 ani_hp3[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(40, 0),
+  STOP()
+};
+const u16 ani_hp4[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(48, 0),
+  STOP()
+};
+const u16 ani_hp5[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(56, 0),
+  STOP()
+};
+const u16 ani_hp6[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(64, 0),
+  STOP()
+};
+const u16 ani_hp7[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(72, 0),
+  STOP()
+};
+const u16 ani_hp8[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(80, 0),
+  STOP()
+};
+const u16 ani_hp9[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(88, 0),
+  STOP()
+};
+const u16 ani_hpslash[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(96, 0),
+  STOP()
+};
+const u16 *ani_hpnum[] = {
+  ani_hp0,
+  ani_hp1,
+  ani_hp2,
+  ani_hp3,
+  ani_hp4,
+  ani_hp5,
+  ani_hp6,
+  ani_hp7,
+  ani_hp8,
+  ani_hp9,
+  ani_hpslash,
+};
+
+const u16 ani_expfull[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(0, 24),
+  STOP()
+};
+const u16 ani_expempty[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(8, 24),
+  STOP()
+};
+const u16 ani_exp0[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(16, 16),
+  STOP()
+};
+const u16 ani_exp1[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(24, 16),
+  STOP()
+};
+const u16 ani_exp2[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(32, 16),
+  STOP()
+};
+const u16 ani_exp3[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(40, 16),
+  STOP()
+};
+const u16 ani_exp4[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(48, 16),
+  STOP()
+};
+const u16 ani_exp5[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(56, 16),
+  STOP()
+};
+const u16 ani_exp6[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(64, 16),
+  STOP()
+};
+const u16 ani_exp7[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(72, 16),
+  STOP()
+};
+const u16 ani_exp8[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(80, 16),
+  STOP()
+};
+const u16 ani_exp9[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(88, 16),
+  STOP()
+};
+const u16 ani_expslash[] ={
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(96, 16),
+  STOP()
+};
+const u16 *ani_expnum[] = {
+  ani_exp0,
+  ani_exp1,
+  ani_exp2,
+  ani_exp3,
+  ani_exp4,
+  ani_exp5,
+  ani_exp6,
+  ani_exp7,
+  ani_exp8,
+  ani_exp9,
+  ani_expslash,
+};
+
+const u16 ani_expselect1[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(0, 32),
+  WAIT(105),
+  TILEXY(48, 32),
+  WAIT(15),
+  JUMP(-4),
+  STOP()
+};
+const u16 ani_expselect2[] = {
+  RESET(),
+  SIZE_16x16(),
+  X(32),
+  TILEXY(32, 32),
+  WAIT(105),
+  TILEXY(80, 32),
+  WAIT(15),
+  JUMP(-4),
+  STOP()
+};
+
+// generated via `node design/levelup.js`
+#define EXPIWAIT(n)  \
+  ADDX(-32),ADDY(36),WAIT(n*3),ADDX(8),ADDY(1),WAIT(1),ADDX(8),ADDY(1),WAIT(1),ADDX(8),WAIT(1),  \
+  ADDX(8),WAIT(1),ADDX(8),ADDY(-1),WAIT(1),ADDX(7),ADDY(-1),WAIT(1),ADDX(7),ADDY(-2),WAIT(1),    \
+  ADDX(7),ADDY(-2),WAIT(1),ADDX(6),ADDY(-2),WAIT(1),ADDX(6),ADDY(-2),WAIT(1),ADDX(5),ADDY(-3),   \
+  WAIT(1),ADDX(4),ADDY(-3),WAIT(1),ADDX(3),ADDY(-3),WAIT(1),ADDX(3),ADDY(-3),WAIT(1),ADDX(2),    \
+  ADDY(-3),WAIT(1),ADDX(2),ADDY(-3),WAIT(1),ADDX(1),ADDY(-4),WAIT(1),ADDY(-3),WAIT(1),ADDX(-1),  \
+  ADDY(-3),WAIT(1),ADDX(-1),ADDY(-3),WAIT(1),ADDX(-2),ADDY(-3),WAIT(1),ADDX(-3),ADDY(-3),        \
+  WAIT(1),ADDX(-3),ADDY(-2),WAIT(1),ADDX(-3),ADDY(-3),WAIT(1),ADDX(-4),ADDY(-2),WAIT(1),         \
+  ADDX(-5),ADDY(-2),WAIT(1),ADDX(-4),ADDY(-1),WAIT(1),ADDX(-5),ADDY(-2),WAIT(1),ADDX(-5),        \
+  ADDY(-1),WAIT(1),ADDX(-5),WAIT(1),ADDX(-5),ADDY(-1),WAIT(1),ADDX(-5),WAIT(1),ADDX(-5),         \
+  WAIT(1),ADDX(-5),ADDY(1),WAIT(1),ADDX(-5),WAIT(1),ADDX(-4),ADDY(1),WAIT(1),ADDX(-4),ADDY(1),   \
+  WAIT(1),ADDX(-4),ADDY(1),WAIT(1),ADDX(-3),ADDY(2),WAIT(1),ADDX(-3),ADDY(1),WAIT(1),ADDX(-2),   \
+  ADDY(2),WAIT(1),ADDX(-2),ADDY(2),WAIT(1),ADDX(-2),ADDY(1),WAIT(1),ADDX(-1),ADDY(2),WAIT(1),    \
+  ADDX(-1),ADDY(2),WAIT(1),ADDY(2),WAIT(1),ADDY(2),WAIT(1),ADDY(1),WAIT(1),ADDX(1),ADDY(2),      \
+  WAIT(1),ADDX(1),ADDY(2),WAIT(1),ADDX(2),ADDY(1),WAIT(1),ADDX(1),ADDY(1),WAIT(1),ADDX(2),       \
+  ADDY(1),WAIT(1),ADDX(2),ADDY(1),WAIT(1),ADDX(3),ADDY(1),WAIT(1),ADDX(2),ADDY(1),WAIT(1),       \
+  ADDX(2),WAIT(1),ADDX(3),WAIT(1),ADDX(2),ADDY(1),WAIT(1),ADDX(2),WAIT(1),ADDX(2),WAIT(1),       \
+  ADDX(2),ADDY(-1),WAIT(1),ADDX(2),WAIT(1),ADDX(2),WAIT(1),ADDX(1),ADDY(-1),WAIT(1),ADDX(2),     \
+  ADDY(-1),WAIT(1),ADDX(1),WAIT(1),ADDY(-1),WAIT(1),ADDX(1),ADDY(-1),WAIT(1),WAIT(1),ADDY(-1),   \
+  WAIT(1),ADDY(-1),WAIT(1),WAIT(1),ADDX(-1),ADDY(-1),WAIT(1),WAIT(1),ADDX(-1),ADDY(-1),WAIT(1),  \
+  ADDX(-1),WAIT(1),ADDX(-1),WAIT(1),ADDX(-1),WAIT(1),WAIT(240),ADDY(-2),ADDX(1),WAIT(1),         \
+  ADDY(-2),WAIT(1),ADDY(-1),ADDX(1),WAIT(1),ADDY(-1),WAIT(1),WAIT(1),WAIT(1),ADDY(1),ADDX(-1),   \
+  WAIT(1),ADDY(1),WAIT(1),ADDY(2),ADDX(-1),WAIT(1),ADDY(2),WAIT(1),WAIT(240),JUMP(-24)
+
+const u16 ani_expiL[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(0, 48),
+  EXPIWAIT(0),
+  STOP()
+};
+const u16 ani_expiE[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(8, 48),
+  EXPIWAIT(1),
+  STOP()
+};
+const u16 ani_expiV[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(16, 48),
+  EXPIWAIT(2),
+  STOP()
+};
+const u16 ani_expiE2[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(8, 48),
+  EXPIWAIT(3),
+  STOP()
+};
+const u16 ani_expiL2[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(0, 48),
+  EXPIWAIT(4),
+  STOP()
+};
+const u16 ani_expiU[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(24, 48),
+  EXPIWAIT(5),
+  STOP()
+};
+const u16 ani_expiP[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(32, 48),
+  EXPIWAIT(6),
+  STOP()
+};
+const u16 ani_expiX[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(40, 48),
+  EXPIWAIT(7),
+  STOP()
+};
+const u16 ani_expiX2[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(40, 48),
+  EXPIWAIT(8),
+  STOP()
+};
+const u16 ani_expiX3[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(40, 48),
+  EXPIWAIT(9),
+  STOP()
+};

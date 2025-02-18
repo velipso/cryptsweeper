@@ -6,11 +6,9 @@
 //
 
 extern const u8 ctz32_bitpos[32];
+extern const u16 inverse_lut[256];
 
 static inline u32 ctz32(u32 v) {
   if (v == 0) return 32;
   return ctz32_bitpos[((v & -v) * 0x077cb531) >> 27];
 }
-
-u32 roll(u32 sides); // returns random number from 0 to sides-1
-void shuffle32(u32 *arr, u32 length);

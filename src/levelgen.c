@@ -105,7 +105,7 @@ static i32 count_border_chest(struct levelgen_ctx *ctx, i32 x, i32 y) {
       i32 bx = dx + x;
       if (bx < 0 || bx >= BOARD_W) continue;
       u8 type = ctx->board[bx + by];
-      if (type == T_CHEST_HEAL || type == T_CHEST_EYE || type == T_CHEST_EXP) {
+      if (type == T_CHEST_HEAL || type == T_CHEST_EYE || type == T_CHEST_EXP || type == T_ITEM_EYE) {
         result++;
       }
     }
@@ -132,16 +132,15 @@ static i32 board_score(struct levelgen_ctx *ctx) {
   i32 score = 0;
   for (i32 y = 0, b = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++, b++) {
-      switch (ctx->board[b]) {
-        case T_EYE: {
-          if (x <= 1 || y <= 1 || x >= BOARD_W - 2 || y >= BOARD_H - 2) {
-            score -= 10000;
-          }
+      switch (GET_TYPE(ctx->board[b])) {
+        case T_ITEM_EYE:
+        case T_CHEST_EYE: {
+          u32 boundary = GET_TYPE(ctx->board[b]) == T_ITEM_EYE ? 1 : 0;
           u32 heals = 0;
           u32 walls = 0;
           for (i32 dy = -2; dy <= 2; dy++) {
             i32 by = dy + y;
-            if (by < 0 || by >= BOARD_H) {
+            if (by < boundary || by >= BOARD_H - boundary) {
               score -= 10000;
               continue;
             }
@@ -150,7 +149,7 @@ static i32 board_score(struct levelgen_ctx *ctx) {
             for (i32 dx = -dw; dx <= dw; dx++) {
               if (dy == 0 && dx == 0) continue;
               i32 bx = dx + x;
-              if (bx < 0 || bx >= BOARD_W) {
+              if (bx < boundary || bx >= BOARD_W - boundary) {
                 score -= 10000;
                 continue;
               }
@@ -160,14 +159,17 @@ static i32 board_score(struct levelgen_ctx *ctx) {
                 case T_LV5B:
                 case T_LV8:
                 case T_LV11:
-                case T_LV13:
                 case T_MINE:
-                case T_CHEST_EYE:
                 case T_CHEST_EXP:
                   score -= 2000;
                   break;
                 case T_CHEST_HEAL:
                   heals++;
+                  break;
+                case T_LV13:
+                case T_CHEST_EYE:
+                case T_ITEM_EYE:
+                  score -= 10000;
                   break;
                 case T_WALL:
                   walls++;
@@ -228,7 +230,6 @@ static i32 board_score(struct levelgen_ctx *ctx) {
           }
           break;
         case T_CHEST_HEAL:
-        case T_CHEST_EYE:
         case T_CHEST_EXP:
           score -= 1000 * count_border_chest(ctx, x, y);
           break;
@@ -336,10 +337,9 @@ restart:
       u32 bx = roll(ctx, BOARD_CW - 2) + 1;
       u32 bx1 = BOARD_CW - 1 - bx;
       u32 bx2 = BOARD_CW + bx;
-      u32 by1 = roll(ctx, BOARD_H);
-      u32 by2 = roll(ctx, 4) ? roll(ctx, BOARD_H) : by1;
-      u32 k1 = bx1 + by1 * BOARD_W;
-      u32 k2 = bx2 + by2 * BOARD_W;
+      u32 by = roll(ctx, BOARD_H);
+      u32 k1 = bx1 + by * BOARD_W;
+      u32 k2 = bx2 + by * BOARD_W;
       if (ctx->board[k1] || ctx->board[k2]) continue;
       ctx->board[k1] = T_LV9;
       ctx->board[k2] = T_LV9;
@@ -358,7 +358,8 @@ restart:
   level_add(ctx, T_LV5B, 2); // gazer
   level_add(ctx, T_MINE, 9);
   level_add(ctx, T_CHEST_HEAL, 7);
-  level_add(ctx, T_EYE, 1);
+  level_add(ctx, T_CHEST_EYE, 1);
+  level_add(ctx, T_ITEM_EYE | 0x80, 1); // collectable at the start
   level_add(ctx, T_CHEST_EXP, 3);
   level_attach_unfixed(ctx);
 
@@ -385,6 +386,5 @@ void levelgen_stage2(struct levelgen_ctx *ctx) {
   level_add(ctx, T_LV5C, 8); // slime
   level_add(ctx, T_LV11, 1);
   // TODO: 1 gnome
-  level_add(ctx, T_CHEST_EYE, 1);
   level_attach_unfixed(ctx);
 }

@@ -13,14 +13,16 @@
 #include "util.h"
 #include "levelgen.h"
 
-#define S_CURSOR1    0
-#define S_CURSOR2    1
-#define S_CURSOR3    2
-#define S_CURSOR4    3
-#define S_HP_START   4
-#define S_HP_END     21
-#define S_EXP_START  22
-#define S_EXP_END    51
+#define S_POPUPCUR   0
+#define S_POPUP      1
+#define S_CURSOR1    2
+#define S_CURSOR2    3
+#define S_CURSOR3    4
+#define S_CURSOR4    5
+#define S_HP_START   6
+#define S_HP_END     23
+#define S_EXP_START  24
+#define S_EXP_END    53
 
 static u32 g_down;
 static u32 g_hit;
@@ -55,6 +57,15 @@ struct game_st game;
 u32 rnd_seed = 1;
 u32 rnd_i = 1;
 
+enum tile_info_action {
+  TI_ICON,
+  TI_THREAT,
+  TI_COLLECT,
+  TI_ATTACK
+};
+
+static i32 tile_info(u32 type, enum tile_info_action action);
+
 // map 0-10 -> 0-16
 static const u16 volume_map_fwd[] SECTION_ROM =
   {0, 1, 2, 3, 5, 6, 8, 10, 12, 14, 16};
@@ -77,48 +88,18 @@ static void nextframe() {
 }
 
 static u32 board_type_to_tile(u32 type) {
-  #define TILE(px, py)  (px >> 3) + ((py >> 3) << 5)
-  switch (GET_TYPE(type)) {
-    case T_EMPTY:      return 0;
-    case T_LV1A:       return TILE(160, 0);
-    case T_LV1B:       return TILE(160, 16);
-    case T_LV2:        return TILE(160, 32);
-    case T_LV3:        return TILE(160, 48);
-    case T_LV4:        return TILE(160, 64);
-    case T_LV5A:       return TILE(160, 80);
-    case T_LV5B:       return TILE(160, 96);
-    case T_LV5C:       return TILE(160, 112);
-    case T_LV6:        return TILE(208, 0);
-    case T_LV7A:       return TILE(208, 16);
-    case T_LV7B:       return TILE(208, 16);
-    case T_LV7C:       return TILE(208, 16);
-    case T_LV7D:       return TILE(208, 16);
-    case T_LV8:        return TILE(208, 32);
-    case T_LV9:        return TILE(208, 48);
-    case T_LV10:       return TILE(208, 64);
-    case T_LV11:       return TILE(208, 80);
-    case T_LV13:       return TILE(208, 96);
-    case T_MINE:       return TILE(64, 0);
-    case T_WALL:       return TILE(64, 32);
-    case T_CHEST_HEAL: return TILE(64, 16);
-    case T_CHEST_EYE:  return TILE(64, 16);
-    case T_CHEST_EXP:  return TILE(64, 16);
-    case T_ITEM_HEAL:  return TILE(0, 112);
-    case T_ITEM_EYE:   return TILE(16, 112);
-    case T_ITEM_SHOW1: return TILE(32, 112);
-    case T_ITEM_SHOW5: return TILE(48, 112);
-    case T_ITEM_EXP1:  return TILE(64, 112);
-    case T_ITEM_EXP3:  return TILE(80, 112);
-    case T_ITEM_EXP5:  return TILE(96, 112);
+  i32 res = tile_info(type, TI_ICON);
+  if (res < 0) {
+    return 0;
   }
-  return 0;
-  #undef TILE
+  return res;
 }
 
 static u32 dig99(i32 num) {
   if (num < 0) num = 0;
   if (num > 99) num = 99;
   u32 d1 =
+    num < 10 ? 0 :
     num < 20 ? 1 :
     num < 30 ? 2 :
     num < 40 ? 3 :
@@ -172,6 +153,14 @@ static void place_minehint(i32 x, i32 y, i32 num) {
   sys_set_map(0x1d, offset + 2, num == 0 ? 0 : num + 1);
 }
 
+static void clear_answer(i32 x, i32 y) {
+  u32 offset = (x + 1) * 4 + (y + 1) * 128;
+  sys_set_map(0x1e, offset +  0, 0);
+  sys_set_map(0x1e, offset +  2, 0);
+  sys_set_map(0x1e, offset + 64, 0);
+  sys_set_map(0x1e, offset + 66, 0);
+}
+
 static void place_answer(i32 x, i32 y, i32 frame) {
   frame *= 2;
   u32 t = board_type_to_tile(game.board[x + y * BOARD_W]);
@@ -204,29 +193,11 @@ static void place_floor(i32 x, i32 y, i32 state) {
 
 static i32 threat_at(i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return 0;
-  switch (GET_TYPE(game.board[x + y * BOARD_W])) {
-    case T_EMPTY:      return 0;
-    case T_LV1A:       return 1;
-    case T_LV1B:       return 1;
-    case T_LV2:        return 2;
-    case T_LV3:        return 3;
-    case T_LV4:        return 4;
-    case T_LV5A:       return 5;
-    case T_LV5B:       return 5;
-    case T_LV5C:       return 5;
-    case T_LV6:        return 6;
-    case T_LV7A:       return 7;
-    case T_LV7B:       return 7;
-    case T_LV7C:       return 7;
-    case T_LV7D:       return 7;
-    case T_LV8:        return 8;
-    case T_LV9:        return 9;
-    case T_LV10:       return 10;
-    case T_LV11:       return 11;
-    case T_LV13:       return 13;
-    case T_MINE:       return 0x100;
+  i32 res = tile_info(game.board[x + y * BOARD_W], TI_THREAT);
+  if (res < 0) {
+    return 0;
   }
-  return 0;
+  return res;
 }
 
 static i32 count_threat(i32 x, i32 y) {
@@ -242,6 +213,7 @@ static i32 count_threat(i32 x, i32 y) {
 }
 
 static void place_threat(i32 x, i32 y) {
+  if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return;
   i32 threat = count_threat(x, y);
   place_minehint(x, y, threat >> 8);
   if (threat & 0xff) {
@@ -263,6 +235,13 @@ static void cursor_show() {
   g_sprites[S_CURSOR2].pc = ani_cursor2;
   g_sprites[S_CURSOR3].pc = ani_cursor3;
   g_sprites[S_CURSOR4].pc = ani_cursor4;
+}
+
+static void cursor_pause() {
+  g_sprites[S_CURSOR1].pc = ani_cursor1_pause;
+  g_sprites[S_CURSOR2].pc = ani_cursor2_pause;
+  g_sprites[S_CURSOR3].pc = ani_cursor3_pause;
+  g_sprites[S_CURSOR4].pc = ani_cursor4_pause;
 }
 
 static void cursor_to_gamesel() {
@@ -300,7 +279,7 @@ static void place_statdig(u8 dig, i32 x, const u16 *pc[]) {
   next_statdig_spr++;
 }
 
-static void place_statnum(u8 cur, u8 max, i32 x, const u16 *pc[]) {
+static void place_statnum(u8 cur, u8 max, i32 x, const u16 *pc[], i32 end_spr) {
   u32 cur2 = dig99(cur);
   u32 cur1 = cur2 >> 4;
   cur2 &= 15;
@@ -334,11 +313,15 @@ static void place_statnum(u8 cur, u8 max, i32 x, const u16 *pc[]) {
     place_statdig(max2, x, pc);
     x += 7;
   }
+  // clear out remaining sprites
+  while (next_statdig_spr <= end_spr) {
+    g_sprites[next_statdig_spr++].pc = NULL;
+  }
 }
 
 static void place_hp(u8 cur, u8 max) {
   const i32 hp_x = 37;
-  const i32 hp_y = 150;
+  const i32 hp_y = 149;
   if (cur <= 7) {
     // put empty in the background
     i32 hp_i = 6;
@@ -347,6 +330,7 @@ static void place_hp(u8 cur, u8 max) {
       g_sprites[S_HP_START + i].origin.x = hp_x + (6 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y + 2;
     }
+    hp_i = 12;
     for (i32 i = 7; i < 13; i++, hp_i--) {
       g_sprites[S_HP_START + i].pc = hp_i < max ? ani_hpempty : NULL;
       g_sprites[S_HP_START + i].origin.x = hp_x + 4 + (12 - i) * 8;
@@ -366,7 +350,7 @@ static void place_hp(u8 cur, u8 max) {
     }
   }
   next_statdig_spr = S_HP_START + 13;
-  place_statnum(cur, max, hp_x, ani_hpnum);
+  place_statnum(cur, max, hp_x, ani_hpnum, S_HP_END);
 }
 
 static void place_explevelup() {
@@ -397,7 +381,7 @@ static void place_explevelup() {
 
 static void place_expicons(u8 cur, u8 max) {
   const i32 exp_x = 135;
-  const i32 exp_y = 150;
+  const i32 exp_y = 149;
   if (cur < 13) {
     // put empty in the background
     i32 exp_i = 12;
@@ -406,6 +390,7 @@ static void place_expicons(u8 cur, u8 max) {
       g_sprites[S_EXP_START + i].origin.x = exp_x + (12 - i) * 8;
       g_sprites[S_EXP_START + i].origin.y = exp_y + 2;
     }
+    exp_i = 24;
     for (i32 i = 13; i < 25; i++, exp_i--) {
       g_sprites[S_EXP_START + i].pc = exp_i < max ? ani_expempty : NULL;
       g_sprites[S_EXP_START + i].origin.x = exp_x + 4 + (24 - i) * 8;
@@ -428,7 +413,40 @@ static void place_expicons(u8 cur, u8 max) {
 
 static void place_expnum(u8 cur, u8 max) {
   next_statdig_spr = S_EXP_START + 25;
-  place_statnum(cur, max, 135, ani_expnum);
+  place_statnum(cur, max, 135, ani_expnum, S_EXP_END);
+}
+
+static i32 max_hp() {
+  static const i32 table[] = {5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12};
+  if (game.level < 16) {
+    return table[game.level];
+  }
+  return 13;
+}
+
+static i32 max_exp() {
+  static const i32 table[] = {4, 5, 7, 9, 9, 10, 12, 12, 12, 15, 18, 21, 21, 25};
+  if (game.level < 14) {
+    return table[game.level];
+  }
+  return 25;
+}
+
+static void award_exp(i32 amt) {
+  i32 mxp = max_exp();
+  bool before = game.exp < mxp;
+  game.exp += amt;
+  place_expnum(game.exp, mxp);
+  bool after = game.exp < mxp;
+  if (before) {
+    if (after) {
+      place_expicons(game.exp, mxp);
+    } else {
+      place_explevelup();
+    }
+  } else {
+    // can already level up
+  }
 }
 
 static const u16 stat_tiles_top[] SECTION_ROM = {
@@ -466,6 +484,12 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
 };
 
 static void load_level(u32 seed) {
+  // reset character
+  game.level = 0;
+  game.hp = max_hp();
+  game.exp = 0;
+
+  // generate level
   struct levelgen_ctx *ctx = malloc(sizeof(struct levelgen_ctx));
   const u8 *levels = BINADDR(levels_bin);
   u32 base = whisky2(seed, 999) & ((BINSIZE(levels_bin) >> 7) - 1);
@@ -475,6 +499,7 @@ static void load_level(u32 seed) {
   }
   levelgen_seed(ctx, seed);
   //levelgen_stage2(ctx); // TODO: uncomment
+
   game.selx = BOARD_CW;
   game.sely = BOARD_CH;
   for (i32 y = 0; y < BOARD_H; y++) {
@@ -492,10 +517,6 @@ static void load_level(u32 seed) {
   free(ctx);
   cursor_to_gamesel();
   cursor_show();
-
-  game.level = 0;
-  game.hp = 5;
-  game.exp = 0;
 
   // clear board layers
   sys_set_bgt3_scroll(8, 13);
@@ -515,6 +536,7 @@ static void load_level(u32 seed) {
         switch (GET_STATUS(t)) {
           case 0:
             place_floor(x, y, 0);
+            clear_answer(x, y);
             break;
           case 1:
             place_floor(x, y, 0);
@@ -524,6 +546,7 @@ static void load_level(u32 seed) {
             if (GET_TYPE(t) == T_EMPTY) {
               place_floor(x, y, 2);
               place_threat(x, y);
+              clear_answer(x, y);
             } else {
               place_floor(x, y, 1);
               place_answer(x, y, IS_ITEM(t) ? 0 : 2);
@@ -547,6 +570,9 @@ static void load_level(u32 seed) {
   sys_set_bgt0_scroll(4, -144);
   sys_copy_map(0x1c, 0, stat_tiles_top, sizeof(stat_tiles_top));
   sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot0, sizeof(stat_tiles_bot0));
+  place_hp(game.hp, game.hp);
+  place_expnum(game.exp, max_exp());
+  place_expicons(game.exp, max_exp());
 }
 
 static u32 pause_menu() {
@@ -554,16 +580,25 @@ static u32 pause_menu() {
   g_statsel_x = 0;
   g_statsel_y = 0;
   // -144 to -104 to -24
-  for (i32 i = -140; i <= -24; i += 4) {
+  static i32 pause_move_amt[] = {
+    1, 1, 2, 2, 3, 3, 4, 4, 4, 100, 5,
+    5, 6, 6, 7, 7, 7, 7, 6, 6, 5,
+    5, 4, 4, 4, 3, 3, 2, 2, 1, 1,
+    -1
+  };
+  i32 pause_i = 0;
+  for (i32 pos = -144; pause_move_amt[pause_i] >= 0; pause_i++) {
+    i32 amt = pause_move_amt[pause_i];
+    if (amt == 100) {
+      sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot, sizeof(stat_tiles_bot));
+      continue;
+    }
+    pos += amt;
     for (i32 j = S_HP_START; j <= S_EXP_END; j++) {
-      g_sprites[j].origin.y -= 4;
+      g_sprites[j].origin.y -= amt;
     }
     nextframe();
-    if (i == -104) {
-      // TODO: load books, load volumes
-      sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot, sizeof(stat_tiles_bot));
-    }
-    sys_set_bgt0_scroll(4, i);
+    sys_set_bgt0_scroll(4, pos);
   }
   cursor_to_statsel();
   cursor_show();
@@ -611,18 +646,65 @@ static u32 pause_menu() {
     }
   }
   cursor_hide();
-  for (i32 i = -28; i >= -144; i -= 4) {
+  pause_i--;
+  for (i32 pos = -24; pause_i >= 0; pause_i--) {
+    i32 amt = pause_move_amt[pause_i];
+    if (amt == 100) {
+      sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot0, sizeof(stat_tiles_bot0));
+      continue;
+    }
+    pos -= amt;
     for (i32 j = S_HP_START; j <= S_EXP_END; j++) {
-      g_sprites[j].origin.y += 4;
+      g_sprites[j].origin.y += amt;
     }
     nextframe();
-    if (i == -104) {
-      sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot0, sizeof(stat_tiles_bot0));
-    }
-    sys_set_bgt0_scroll(4, i);
+    sys_set_bgt0_scroll(4, pos);
   }
   cursor_to_gamesel();
   cursor_show();
+  return 0;
+}
+
+static i32 note_menu() {
+  i32 mx = 0, my = 0;
+  i32 popx = 0;
+  i32 popy = game.sely * 16 - 18;
+  if (popy < 1) popy = 1;
+  if (popy > 91) popy = 91;
+  if (game.selx < BOARD_CW) {
+    popx = game.selx * 16 + 29;
+  } else {
+    popx = game.selx * 16 - 60;
+  }
+  cursor_pause();
+  g_sprites[S_POPUP].pc = ani_note;
+  g_sprites[S_POPUP].origin.x = popx;
+  g_sprites[S_POPUP].origin.y = popy;
+  g_sprites[S_POPUPCUR].pc = ani_notecur;
+  for (;;) {
+    g_sprites[S_POPUPCUR].origin.x = popx + 1 + mx * 15;
+    g_sprites[S_POPUPCUR].origin.y = popy + 2 + my * 14;
+    nextframe();
+    if (g_hit & SYS_INPUT_A) {
+      break;
+    } else if ((g_hit & SYS_INPUT_B) || (g_hit & SYS_INPUT_ST)) {
+      mx = -1;
+      my = 0;
+      break;
+    } else if (g_hit & SYS_INPUT_U) {
+      if (my > 0) my--;
+    } else if (g_hit & SYS_INPUT_R) {
+      if (mx < 3) mx++;
+    } else if (g_hit & SYS_INPUT_D) {
+      if (my < 3) my++;
+    } else if (g_hit & SYS_INPUT_L) {
+      if (mx > 0) mx--;
+    }
+  }
+  g_sprites[S_POPUP].pc = NULL;
+  g_sprites[S_POPUPCUR].pc = NULL;
+  cursor_show();
+  return my * 4 + mx;
 }
 
 void gvmain() {
@@ -689,12 +771,10 @@ void gvmain() {
   gfx_showscreen(true);
 
   load_level(1234);
-  place_hp(12, 13);
-  place_expnum(25, 25);
-  place_expicons(25, 25);
-  place_explevelup();
 
+  i32 levelup_cooldown = 0;
   for (;;) {
+    if (levelup_cooldown > 0) levelup_cooldown--;
     nextframe();
     if (g_hit & SYS_INPUT_U) {
       if (game.sely > 0) {
@@ -726,109 +806,345 @@ void gvmain() {
       cursor_to_gamesel();
     } else if (g_hit & SYS_INPUT_ST) {
       pause_menu();
+    } else if (g_hit & SYS_INPUT_SE) {
+      if (!levelup_cooldown) {
+        if (game.exp >= max_exp()) {
+          // level up!
+          levelup_cooldown = 30;
+          game.exp -= max_exp();
+          game.level++;
+          game.hp = max_hp();
+          place_hp(game.hp, game.hp);
+          place_expnum(game.exp, max_exp());
+          if (game.exp >= max_exp()) {
+            place_explevelup();
+          } else {
+            place_expicons(game.exp, max_exp());
+          }
+        } else {
+          sfx_bump();
+        }
+      }
     } else if (g_hit & SYS_INPUT_B) {
-      // TODO: marker popup
+      u32 k = game.selx + game.sely * BOARD_W;
+      if (GET_STATUS(game.board[k]) == 0) {
+        i32 r = note_menu();
+        if (r >= 0) {
+          if (r < 13) {
+            place_number(game.selx, game.sely, 4, r + 1);
+          } else if (r == 13) { // question mark
+            place_number(game.selx, game.sely, 4, -1);
+          } else if (r == 14) { // mine
+            place_number(game.selx, game.sely, 4, -2);
+          } else if (r == 15) { // blank
+            place_number(game.selx, game.sely, 4, -3);
+          }
+        }
+      } else {
+        sfx_bump();
+      }
     } else if (g_hit & SYS_INPUT_A) {
       u32 k = game.selx + game.sely * BOARD_W;
       if (GET_STATUS(game.board[k]) == 2) {
-        // collect
-        switch (GET_TYPE(game.board[k])) {
-          case T_EMPTY: break;
-          case T_LV1A:
-          case T_LV1B:
-          case T_LV2:
-          case T_LV3:
-          case T_LV4:
-          case T_LV5A:
-          case T_LV5B:
-          case T_LV5C:
-          case T_LV6:
-          case T_LV7A:
-          case T_LV7B:
-          case T_LV7C:
-          case T_LV7D:
-          case T_LV8:
-          case T_LV9:
-          case T_LV10:
-          case T_LV11:
-          case T_LV13:
-            // TODO: fight monster
-            break;
-          case T_MINE:
-            // TODO: die
-            break;
-          case T_WALL:
-            // TODO: attack wall
-            break;
-          case T_CHEST_HEAL:
-            SET_TYPE(game.board[k], T_ITEM_HEAL);
-            place_answer(game.selx, game.sely, 0);
-            place_floor(game.selx, game.sely, 1);
-            break;
-          case T_CHEST_EYE:
-            SET_TYPE(game.board[k], T_ITEM_EYE);
-            place_answer(game.selx, game.sely, 0);
-            place_floor(game.selx, game.sely, 1);
-            break;
-          case T_CHEST_EXP:
-            SET_TYPE(game.board[k], T_ITEM_EXP5);
-            place_answer(game.selx, game.sely, 0);
-            place_floor(game.selx, game.sely, 1);
-            break;
-        }
+        tile_info(game.board[k], TI_COLLECT);
       } else {
-        // attack
+        place_number(game.selx, game.sely, 0, -3);
         SET_STATUS(game.board[k], 2);
-        switch (GET_TYPE(game.board[k])) {
-          case T_EMPTY:
-            place_floor(game.selx, game.sely, 2);
-            place_threat(game.selx, game.sely);
-            break;
-          case T_LV1A:
-          case T_LV1B:
-          case T_LV2:
-          case T_LV3:
-          case T_LV4:
-          case T_LV5A:
-          case T_LV5B:
-          case T_LV5C:
-          case T_LV6:
-          case T_LV7A:
-          case T_LV7B:
-          case T_LV7C:
-          case T_LV7D:
-          case T_LV8:
-          case T_LV9:
-          case T_LV10:
-          case T_LV11:
-          case T_LV13:
-            // TODO: fight monster
-            place_floor(game.selx, game.sely, 1);
-            place_answer(game.selx, game.sely, 2);
-            break;
-          case T_MINE:
-            // TODO: die
-            place_floor(game.selx, game.sely, 2);
-            place_answer(game.selx, game.sely, 2);
-            break;
-          case T_WALL:
-          case T_CHEST_HEAL:
-          case T_CHEST_EYE:
-          case T_CHEST_EXP:
-            place_answer(game.selx, game.sely, 0);
-            break;
-          case T_ITEM_HEAL:
-          case T_ITEM_EYE:
-          case T_ITEM_SHOW1:
-          case T_ITEM_SHOW5:
-          case T_ITEM_EXP1:
-          case T_ITEM_EXP3:
-          case T_ITEM_EXP5:
-            place_floor(game.selx, game.sely, 2);
-            place_answer(game.selx, game.sely, 0);
-            break;
+        tile_info(game.board[k], TI_ATTACK);
+      }
+      // refresh counts
+      for (i32 dy = -1; dy <= 1; dy++) {
+        i32 by = dy + game.sely;
+        if (by < 0 || by >= BOARD_H) continue;
+        for (i32 dx = -1; dx <= 1; dx++) {
+          i32 bx = dx + game.selx;
+          if (bx < 0 || bx >= BOARD_W) continue;
+          if (game.board[bx + by * BOARD_W] == 0x80) { // empty and shown
+            place_threat(bx, by);
+          }
         }
       }
     }
   }
+}
+
+static i32 collect_monster() {
+  u32 k = game.selx + game.sely * BOARD_W;
+  i32 exp = tile_info(game.board[k], TI_THREAT);
+  award_exp(exp);
+  SET_TYPE(game.board[k], T_EMPTY);
+  place_answer(game.selx, game.sely, 0);
+  place_floor(game.selx, game.sely, 2);
+  return 0;
+}
+
+static i32 attack_monster() {
+  u32 k = game.selx + game.sely * BOARD_W;
+  i32 exp = tile_info(game.board[k], TI_THREAT);
+  place_floor(game.selx, game.sely, 1);
+  place_answer(game.selx, game.sely, 2);
+  if (exp > game.hp) {
+    // TODO: die!
+  } else {
+    game.hp -= exp;
+    place_hp(game.hp, max_hp());
+  }
+  return 0;
+}
+
+static i32 collect_chest(u32 new_item) {
+  SET_TYPE(game.board[game.selx + game.sely * BOARD_W], new_item);
+  place_answer(game.selx, game.sely, 0);
+  place_floor(game.selx, game.sely, 1);
+  return 0;
+}
+
+static i32 attack_chest() {
+  place_answer(game.selx, game.sely, 0);
+  return 0;
+}
+
+static i32 attack_item() {
+  place_floor(game.selx, game.sely, 2);
+  place_answer(game.selx, game.sely, 0);
+  return 0;
+}
+
+static i32 tile_info(u32 type, enum tile_info_action action) {
+  #define TILE(px, py)  (px >> 3) + ((py >> 3) << 5)
+  switch (GET_TYPE(type)) {
+    case T_EMPTY:
+      switch (action) {
+        case TI_ICON: return 0;
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0;
+        case TI_ATTACK:
+          place_floor(game.selx, game.sely, 2);
+          return 0;
+      }
+      break;
+    case T_LV1A:
+      switch (action) {
+        case TI_ICON: return TILE(160, 0);
+        case TI_THREAT: return 1;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV1B:
+      switch (action) {
+        case TI_ICON: return TILE(160, 16);
+        case TI_THREAT: return 1;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV2:
+      switch (action) {
+        case TI_ICON: return TILE(160, 32);
+        case TI_THREAT: return 2;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV3:
+      switch (action) {
+        case TI_ICON: return TILE(160, 48);
+        case TI_THREAT: return 3;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV4:
+      switch (action) {
+        case TI_ICON: return TILE(160, 64);
+        case TI_THREAT: return 4;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV5A:
+      switch (action) {
+        case TI_ICON: return TILE(160, 80);
+        case TI_THREAT: return 5;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV5B:
+      switch (action) {
+        case TI_ICON: return TILE(160, 96);
+        case TI_THREAT: return 5;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV5C:
+      switch (action) {
+        case TI_ICON: return TILE(160, 112);
+        case TI_THREAT: return 5;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV6:
+      switch (action) {
+        case TI_ICON: return TILE(208, 0);
+        case TI_THREAT: return 6;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV7A:
+    case T_LV7B:
+    case T_LV7C:
+    case T_LV7D:
+      switch (action) {
+        case TI_ICON: return TILE(208, 16);
+        case TI_THREAT: return 7;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV8:
+      switch (action) {
+        case TI_ICON: return TILE(208, 32);
+        case TI_THREAT: return 8;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV9:
+      switch (action) {
+        case TI_ICON: return TILE(208, 48);
+        case TI_THREAT: return 9;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV10:
+      switch (action) {
+        case TI_ICON: return TILE(208, 64);
+        case TI_THREAT: return 10;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV11:
+      switch (action) {
+        case TI_ICON: return TILE(208, 80);
+        case TI_THREAT: return 11;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_LV13:
+      switch (action) {
+        case TI_ICON: return TILE(208, 96);
+        case TI_THREAT: return 13;
+        case TI_COLLECT: return collect_monster();
+        case TI_ATTACK: return attack_monster();
+      }
+      break;
+    case T_MINE:
+      switch (action) {
+        case TI_ICON: return TILE(64, 0);
+        case TI_THREAT: return 0x100;
+        case TI_COLLECT: return 0; // TODO: die
+        case TI_ATTACK: return 0; // TODO: die
+      }
+      break;
+    case T_WALL:
+      switch (action) {
+        case TI_ICON: return TILE(64, 32);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: ???
+        case TI_ATTACK:
+          place_answer(game.selx, game.sely, 0);
+          return 0;
+      }
+      break;
+    case T_CHEST_HEAL:
+      switch (action) {
+        case TI_ICON: return TILE(64, 16);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return collect_chest(T_ITEM_HEAL);
+        case TI_ATTACK: return attack_chest();
+      }
+      break;
+    case T_CHEST_EYE:
+      switch (action) {
+        case TI_ICON: return TILE(64, 16);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return collect_chest(T_ITEM_EYE);
+        case TI_ATTACK: return attack_chest();
+      }
+      break;
+    case T_CHEST_EXP:
+      switch (action) {
+        case TI_ICON: return TILE(64, 16);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return collect_chest(T_ITEM_EXP5);
+        case TI_ATTACK: return attack_chest();
+      }
+      break;
+    case T_ITEM_HEAL:
+      switch (action) {
+        case TI_ICON: return TILE(0, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: this
+        case TI_ATTACK: return attack_item();
+      }
+      break;
+    case T_ITEM_EYE:
+      switch (action) {
+        case TI_ICON: return TILE(16, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: this
+        case TI_ATTACK: return attack_item();
+      }
+      break;
+    case T_ITEM_SHOW1:
+      switch (action) {
+        case TI_ICON: return TILE(32, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: this
+        case TI_ATTACK: return attack_item();
+      }
+      break;
+    case T_ITEM_SHOW5:
+      switch (action) {
+        case TI_ICON: return TILE(48, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: this
+        case TI_ATTACK: return attack_item();
+      }
+      break;
+    case T_ITEM_EXP1:
+      switch (action) {
+        case TI_ICON: return TILE(64, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: this
+        case TI_ATTACK: return attack_item();
+      }
+      break;
+    case T_ITEM_EXP3:
+      switch (action) {
+        case TI_ICON: return TILE(80, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: this
+        case TI_ATTACK: return attack_item();
+      }
+      break;
+    case T_ITEM_EXP5:
+      switch (action) {
+        case TI_ICON: return TILE(96, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return 0; // TODO: this
+        case TI_ATTACK: return attack_item();
+      }
+      break;
+  }
+  #undef TILE
+  return -1;
 }

@@ -171,6 +171,39 @@ const u16 ani_cursor4[] ={
   STOP()
 };
 
+const u16 ani_cursor1_pause[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(0, 0),
+  X(-2),
+  Y(-2),
+  STOP()
+};
+const u16 ani_cursor2_pause[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(8, 0),
+  X(-6),
+  Y(-2),
+  STOP()
+};
+const u16 ani_cursor3_pause[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(0, 8),
+  X(-2),
+  Y(-6),
+  STOP()
+};
+const u16 ani_cursor4_pause[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(8, 8),
+  X(-6),
+  Y(-6),
+  STOP()
+};
+
 const u16 ani_hpfull[] = {
   RESET(),
   SIZE_8x8(),
@@ -471,4 +504,17 @@ const u16 ani_expiX3[] = {
   TILEXY(40, 48),
   EXPIWAIT(9),
   STOP()
+};
+
+const u16 ani_note[] = {
+  RESET(),
+  SIZE_64x64(),
+  TILEXY(0, 64),
+  STOP(),
+};
+const u16 ani_notecur[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(48, 48),
+  STOP(),
 };

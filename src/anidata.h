@@ -12,6 +12,10 @@ extern const u16 ani_cursor1[];
 extern const u16 ani_cursor2[];
 extern const u16 ani_cursor3[];
 extern const u16 ani_cursor4[];
+extern const u16 ani_cursor1_pause[];
+extern const u16 ani_cursor2_pause[];
+extern const u16 ani_cursor3_pause[];
+extern const u16 ani_cursor4_pause[];
 
 extern const u16 ani_hpfull[];
 extern const u16 ani_hpempty[];
@@ -55,3 +59,6 @@ extern const u16 ani_expiP[];
 extern const u16 ani_expiX[];
 extern const u16 ani_expiX2[];
 extern const u16 ani_expiX3[];
+
+extern const u16 ani_note[];
+extern const u16 ani_notecur[];

@@ -518,3 +518,61 @@ const u16 ani_notecur[] = {
   TILEXY(48, 48),
   STOP(),
 };
+
+const u16 ani_popup[] = {
+  RESET(),
+  SIZE_64x64(),
+  TILEXY(0, 128),
+  STOP(),
+};
+const u16 ani_arrowr[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(64, 176),
+  WAIT(10),
+  ADDX(1),
+  WAIT(10),
+  ADDX(-1),
+  JUMP(-4),
+  STOP()
+};
+
+const u16 ani_title_continue1[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(64, 128),
+  STOP()
+};
+const u16 ani_title_continue2[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(96, 128),
+  X(32),
+  STOP()
+};
+const u16 ani_title_newgame1[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(64, 144),
+  STOP()
+};
+const u16 ani_title_newgame2[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(96, 144),
+  X(32),
+  STOP()
+};
+const u16 ani_title_delete1[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(64, 160),
+  STOP()
+};
+const u16 ani_title_delete2[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(96, 160),
+  X(32),
+  STOP()
+};

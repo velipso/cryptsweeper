@@ -46,7 +46,7 @@ static inline u32 whisky2(u32 i0, u32 i1){
   return z3;
 }
 
-static bool random_pick(u32 index, u32 seed) {
+bool random_pick(u32 index, u32 seed) {
   if (index == 0) return true;
   return (whisky2(seed, index) & 0xffff) < inverse16_lut[index > 0xff ? 0xff : index];
 }

@@ -13,16 +13,20 @@
 #include "util.h"
 #include "levelgen.h"
 
-#define S_POPUPCUR   0
-#define S_POPUP      1
-#define S_CURSOR1    2
-#define S_CURSOR2    3
-#define S_CURSOR3    4
-#define S_CURSOR4    5
-#define S_HP_START   6
-#define S_HP_END     23
-#define S_EXP_START  24
-#define S_EXP_END    53
+#define S_POPUPCUR     0
+#define S_POPUP        1
+// title sprites (can overlap with game sprites)
+#define S_TITLE_START  2
+#define S_TITLE_END    20
+// game sprites
+#define S_CURSOR1      2
+#define S_CURSOR2      3
+#define S_CURSOR3      4
+#define S_CURSOR4      5
+#define S_HP_START     6
+#define S_HP_END       23
+#define S_EXP_START    24
+#define S_EXP_END      53
 
 static u32 g_down;
 static u32 g_hit;
@@ -32,6 +36,7 @@ static i32 g_statsel_x;
 static i32 g_statsel_y;
 
 struct game_st {
+  u32 checksum;
   u32 seed;
   u32 rnd;
   u32 books;
@@ -44,6 +49,7 @@ struct game_st {
   u8 level;
   u8 hp;
   u8 exp;
+  i8 notes[BOARD_SIZE];
   u8 board[BOARD_SIZE];
   // SSTT:TTTT
   // where SS is status:
@@ -54,6 +60,8 @@ struct game_st {
 };
 
 struct game_st game;
+struct game_st savedata SECTION_EWRAM;
+u8 *const saveaddr = (u8 *)0x0e000000;
 u32 rnd_seed = 1;
 u32 rnd_i = 1;
 
@@ -79,6 +87,34 @@ static void SECTION_IWRAM_ARM irq_vblank() {
   g_hit = ~g_down & inp;
   g_down = inp;
   rnd_seed = whisky2(rnd_seed, inp);
+}
+
+static u32 calculate_checksum(struct game_st *g) {
+  u32 old_checksum = g->checksum;
+  g->checksum = 0;
+  u32 checksum = 123;
+  const u8 *d = (const u8 *)g;
+  for (i32 i = 0; i < sizeof(struct game_st); i++, d++) {
+    checksum = whisky2(checksum, *d);
+  }
+  g->checksum = old_checksum;
+  return checksum;
+}
+
+static void load_savedata() {
+  memcpy8(&savedata, saveaddr, sizeof(struct game_st));
+}
+
+static inline void save_savedata(bool del) {
+  if (!del) {
+    memcpy8(&savedata, &game, sizeof(struct game_st));
+  }
+  savedata.checksum = calculate_checksum(&savedata);
+  if (del) {
+    // if deleting, corrupt the checksum
+    savedata.checksum ^= 0xaa55a5a5;
+  }
+  memcpy8(saveaddr, &savedata, sizeof(struct game_st));
 }
 
 static void nextframe() {
@@ -483,7 +519,7 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
 
-static void load_level(u32 seed) {
+static void load_level(u32 diff, u32 seed) {
   // reset character
   game.level = 0;
   game.hp = max_hp();
@@ -505,6 +541,7 @@ static void load_level(u32 seed) {
   for (i32 y = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++) {
       i32 i = x + y * BOARD_W;
+      game.notes[i] = -3;
       game.board[i] = ctx->board[i];
       if (GET_TYPE(game.board[i]) == T_LV13) {
         SET_STATUS(game.board[i], 1);
@@ -515,12 +552,16 @@ static void load_level(u32 seed) {
     }
   }
   free(ctx);
+}
+
+static void draw_level() {
   cursor_to_gamesel();
   cursor_show();
 
   // clear board layers
   sys_set_bgt3_scroll(8, 13);
   sys_set_bgt2_scroll(8, 13);
+  sys_set_bgt1_scroll(8, 10);
   for (i32 y = -1; y <= BOARD_H; y++) {
     for (i32 x = -1; x <= BOARD_W; x++) {
       if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) {
@@ -532,15 +573,20 @@ static void load_level(u32 seed) {
         sys_set_map(0x1f, offset + 66, 1);
       } else {
         // place background tile
-        u8 t = game.board[x + y * BOARD_W];
+        u32 k = x + y * BOARD_W;
+        u8 t = game.board[k];
         switch (GET_STATUS(t)) {
           case 0:
             place_floor(x, y, 0);
             clear_answer(x, y);
+            place_number(x, y, 4, game.notes[k]);
+            place_minehint(x, y, 0);
             break;
           case 1:
             place_floor(x, y, 0);
             place_answer(x, y, 0);
+            place_number(x, y, 0, -3);
+            place_minehint(x, y, 0);
             break;
           case 2:
             if (GET_TYPE(t) == T_EMPTY) {
@@ -550,6 +596,8 @@ static void load_level(u32 seed) {
             } else {
               place_floor(x, y, 1);
               place_answer(x, y, IS_ITEM(t) ? 0 : 2);
+              place_number(x, y, 0, -3);
+              place_minehint(x, y, 0);
             }
             break;
         }
@@ -557,25 +605,124 @@ static void load_level(u32 seed) {
     }
   }
 
-  // clear number layer
-  sys_set_bgt1_scroll(8, 10);
-  for (i32 y = 0; y < BOARD_H; y++) {
-    for (i32 x = 0; x < BOARD_W; x++) {
-      place_number(x, y, 0, -3);
-      place_minehint(x, y, 0);
-    }
-  }
-
   // stat layer
   sys_set_bgt0_scroll(4, -144);
   sys_copy_map(0x1c, 0, stat_tiles_top, sizeof(stat_tiles_top));
   sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot0, sizeof(stat_tiles_bot0));
-  place_hp(game.hp, game.hp);
+  place_hp(game.hp, max_hp());
   place_expnum(game.exp, max_exp());
-  place_expicons(game.exp, max_exp());
+  if (game.exp >= max_exp()) {
+    place_explevelup();
+  } else {
+    place_expicons(game.exp, max_exp());
+  }
 }
 
-static u32 pause_menu() {
+static void draw_books() {
+  for (i32 y = 0; y < 3; y++) {
+    for (i32 x = 0; x < 10; x++) {
+      u32 bit = 1 << (x + y * 10);
+      if (game.books & bit) {
+        u32 offset = 450 + x * 6 + y * 192;
+        u32 t = x * 2 + (y + 3) * 64;
+        u32 color = 1; // 0, 1, 2; TODO: lookup book color
+        color *= 3;
+        u32 yb = y == 0 ? 87 : 119;
+        sys_set_map(0x1c, offset - 64, yb + color);
+        sys_set_map(0x1c, offset - 62, yb + 1 + color);
+        sys_set_map(0x1c, offset - 60, yb + 2 + color);
+        sys_set_map(0x1c, offset + 4, 153 + color);
+        sys_set_map(0x1c, offset + 68, 153 + 32 + color);
+        sys_set_map(0x1c, offset +  0, t);
+        sys_set_map(0x1c, offset +  2, t + 1);
+        sys_set_map(0x1c, offset + 64, t + 32);
+        sys_set_map(0x1c, offset + 66, t + 33);
+      }
+    }
+  }
+}
+
+static void popup_show(i32 popup_index, i32 height) {
+  height &= ~7;
+  const void *popup_addr = BINADDR(popups_bin);
+  popup_addr += 8 * 512 * popup_index;
+  for (i32 i = 0; i < 8; i++, popup_addr += 512) {
+    sys_copy_tiles(4, 16384 + i * 1024, popup_addr, 512);
+  }
+  g_sprites[S_POPUP].pc = ani_popup;
+  g_sprites[S_POPUP].origin.x = 88;
+  for (i32 i = -64; i <= height; i += 8) {
+    g_sprites[S_POPUP].origin.y = i;
+    nextframe();
+  }
+}
+
+static void popup_hide(i32 height) {
+  height &= ~7;
+  for (i32 i = height; i >= -64; i -= 8) {
+    g_sprites[S_POPUP].origin.y = i;
+    nextframe();
+  }
+  g_sprites[S_POPUP].pc = NULL;
+}
+
+static i32 popup_delete() {
+  popup_show(30, 72);
+  g_sprites[S_POPUPCUR].pc = ani_arrowr;
+  g_sprites[S_POPUPCUR].origin.x = 97;
+  i32 menu = 0;
+  for (;;) {
+    g_sprites[S_POPUPCUR].origin.y = 90 + menu * 9;
+    nextframe();
+    if (g_hit & SYS_INPUT_U) {
+      if (menu > 0) {
+        menu--;
+      }
+    } else if (g_hit & SYS_INPUT_D) {
+      if (menu < 1) {
+        menu++;
+      }
+    } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
+      break;
+    } else if (g_hit & SYS_INPUT_B) {
+      menu = 0;
+      break;
+    }
+  }
+  g_sprites[S_POPUPCUR].pc = NULL;
+  popup_hide(72);
+  return menu;
+}
+
+static i32 popup_newgame() {
+  popup_show(31, 40);
+  g_sprites[S_POPUPCUR].pc = ani_arrowr;
+  g_sprites[S_POPUPCUR].origin.x = 97;
+  i32 difficulty = game.difficulty;
+  for (;;) {
+    g_sprites[S_POPUPCUR].origin.y = 51 + difficulty * 9;
+    nextframe();
+    if (g_hit & SYS_INPUT_U) {
+      if (difficulty > 0) {
+        difficulty--;
+      }
+    } else if (g_hit & SYS_INPUT_D) {
+      if (difficulty < 4) {
+        difficulty++;
+      }
+    } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
+      break;
+    } else if (g_hit & SYS_INPUT_B) {
+      difficulty = -1;
+      break;
+    }
+  }
+  g_sprites[S_POPUPCUR].pc = NULL;
+  popup_hide(40);
+  return difficulty;
+}
+
+static i32 pause_menu() { // -1 for nothing, 0-4 for new game difficulty, 5 = save+quit
   cursor_hide();
   g_statsel_x = 0;
   g_statsel_y = 0;
@@ -591,6 +738,7 @@ static u32 pause_menu() {
     i32 amt = pause_move_amt[pause_i];
     if (amt == 100) {
       sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot, sizeof(stat_tiles_bot));
+      draw_books();
       continue;
     }
     pos += amt;
@@ -641,8 +789,34 @@ static u32 pause_menu() {
       } else {
         sfx_bump();
       }
-    } else if (g_hit & SYS_INPUT_ST) {
+    } else if ((g_hit & SYS_INPUT_B) || (g_hit & SYS_INPUT_ST)) {
       break;
+    } else if (g_hit & SYS_INPUT_A) {
+      if (g_statsel_y == 0) {
+        // top menu
+        switch (g_statsel_x >> 1) {
+          case 0: // save+quit
+            cursor_hide();
+            return 5;
+          case 1: { // new game
+            cursor_hide();
+            i32 diff = popup_newgame();
+            if (diff >= 0) {
+              return diff;
+            } else {
+              cursor_show();
+            }
+            break;
+          }
+          case 2: // music
+            break;
+          case 3: // sfx
+            break;
+          case 4: // brightness
+            break;
+        }
+      } else {
+      }
     }
   }
   cursor_hide();
@@ -662,7 +836,7 @@ static u32 pause_menu() {
   }
   cursor_to_gamesel();
   cursor_show();
-  return 0;
+  return -1;
 }
 
 static i32 note_menu() {
@@ -707,6 +881,168 @@ static i32 note_menu() {
   return my * 4 + mx;
 }
 
+static void palette_black(i32 amt) {
+  u16 *pal = malloc(512);
+  const u16 *inp = BINADDR(palette_brightness_bin) + game.brightness * 512;
+  for (i32 i = 0; i < 256; i++) {
+    u16 c = inp[i];
+    i32 r = c & 0x1f;
+    i32 g = (c >> 5) & 0x1f;
+    i32 b = (c >> 10) & 0x1f;
+    r = (r * amt) >> 3;
+    g = (g * amt) >> 3;
+    b = (b * amt) >> 3;
+    pal[i] = r | (g << 5) | (b << 10);
+  }
+  sys_copy_bgpal(0, pal, 512);
+  sys_copy_spritepal(0, pal, 512);
+  free(pal);
+}
+
+static void palette_white(i32 amt) {
+  u16 *pal = malloc(512);
+  const u16 *inp = BINADDR(palette_brightness_bin) + game.brightness * 512;
+  for (i32 i = 0; i < 256; i++) {
+    u16 c = inp[i];
+    i32 r = c & 0x1f;
+    i32 g = (c >> 5) & 0x1f;
+    i32 b = (c >> 10) & 0x1f;
+    r = 31 - r;
+    g = 31 - g;
+    b = 31 - b;
+    r = (r * amt) >> 3;
+    g = (g * amt) >> 3;
+    b = (b * amt) >> 3;
+    r = 31 - r;
+    g = 31 - g;
+    b = 31 - b;
+    pal[i] = r | (g << 5) | (b << 10);
+  }
+  sys_copy_bgpal(0, pal, 512);
+  sys_copy_spritepal(0, pal, 512);
+  free(pal);
+}
+
+static void palette_fadefromwhite() {
+  for (i32 i = 0; i <= 8; i++) {
+    palette_white(i);
+    nextframe();
+  }
+}
+
+static void palette_fadetowhite() {
+  for (i32 i = 8; i >= 0; i--) {
+    palette_white(i);
+    nextframe();
+  }
+}
+
+static void palette_fadefromblack() {
+  for (i32 i = 0; i <= 8; i++) {
+    palette_black(i);
+    nextframe();
+  }
+}
+
+static void palette_fadetoblack() {
+  for (i32 i = 8; i >= 0; i--) {
+    palette_black(i);
+    nextframe();
+  }
+}
+
+static i32 title_screen() { // -1 = continue, 0+ = new game difficulty
+  gfx_setmode(GFX_MODE_2I);
+  gfx_showbg0(false);
+  gfx_showbg1(false);
+  sys_set_bgs2_scroll(0, 0);
+  gfx_showbg2(true);
+  gfx_showbg3(false);
+  gfx_showobj(true);
+  sys_copy_tiles(0, 0, BINADDR(scr_title_o), BINSIZE(scr_title_o));
+  palette_fadefromwhite();
+
+  const i32 MENU_Y = 120;
+  const i32 MENU_X = 86;
+
+  // cursor
+  g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
+  g_sprites[S_TITLE_START + 0].origin.x = MENU_X;
+
+  load_savedata();
+  u32 cs = calculate_checksum(&savedata);
+  bool valid_save = savedata.checksum == cs;
+  i32 menu = 0;
+
+  for (;;) {
+    g_sprites[S_TITLE_START + 0].origin.y = (MENU_Y - 5) + menu * 9;
+    u32 next_spr = 1;
+    #define ADDSPR(pc1, pc2, sy)  do {                               \
+        g_sprites[S_TITLE_START + next_spr].pc = pc1;                \
+        g_sprites[S_TITLE_START + next_spr].origin.x = MENU_X + 12;  \
+        g_sprites[S_TITLE_START + next_spr].origin.y = sy;           \
+        next_spr++;                                                  \
+        g_sprites[S_TITLE_START + next_spr].pc = pc2;                \
+        g_sprites[S_TITLE_START + next_spr].origin.x = MENU_X + 12;  \
+        g_sprites[S_TITLE_START + next_spr].origin.y = sy;           \
+        next_spr++;                                                  \
+      } while (0)
+    if (valid_save) {
+      ADDSPR(ani_title_continue1, ani_title_continue2, MENU_Y);
+      ADDSPR(ani_title_newgame1, ani_title_newgame2, MENU_Y + 9);
+      ADDSPR(ani_title_delete1, ani_title_delete2, MENU_Y + 18);
+    } else {
+      ADDSPR(ani_title_newgame1, ani_title_newgame2, MENU_Y);
+      ADDSPR(NULL, NULL, 0);
+      ADDSPR(NULL, NULL, 0);
+    }
+    #undef ADDSPR
+    nextframe();
+    if (g_hit & SYS_INPUT_U) {
+      if (menu > 0) {
+        menu--;
+      }
+    } else if (g_hit & SYS_INPUT_D) {
+      if (menu < (valid_save ? 2 : 0)) {
+        menu++;
+      }
+    } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
+      if (valid_save && menu == 2) {
+        g_sprites[S_TITLE_START + 0].pc = NULL;
+        bool del = !!popup_delete();
+        g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
+        if (del) {
+          // delete!
+          save_savedata(true);
+          valid_save = false;
+          menu = 0;
+        }
+      } else if (valid_save && menu == 0) {
+        g_sprites[S_TITLE_START + 0].pc = NULL;
+        palette_fadetoblack();
+        menu = -1;
+        break;
+      } else {
+        g_sprites[S_TITLE_START + 0].pc = NULL;
+        i32 diff = popup_newgame();
+        if (diff < 0) {
+          g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
+        } else {
+          menu = diff;
+          palette_fadetoblack();
+          break;
+        }
+      }
+    }
+  }
+
+  // hide all title sprites
+  for (i32 i = S_TITLE_START; i <= S_TITLE_END; i++) {
+    g_sprites[i].pc = NULL;
+  }
+  return menu;
+}
+
 void gvmain() {
   sys_init();
   game.brightness = 2;
@@ -717,7 +1053,23 @@ void gvmain() {
   snd_set_sfx_volume(game.sfxvol);
   snd_load_song(BINADDR(song1_gvsong), 1);
   sys_set_vblank(irq_vblank);
+  sys_copy_tiles(4, 0, BINADDR(sprites_bin), BINSIZE(sprites_bin));
+  gfx_showscreen(true);
+  palette_white(0);
+  i32 load;
+start_title:
+  load = title_screen();
+start_game:
   gfx_setmode(GFX_MODE_4T);
+
+  if (load < 0) {
+    memcpy8(&game, &savedata, sizeof(struct game_st));
+    draw_level();
+  } else {
+    load_level(load, rnd32());
+    draw_level();
+  }
+
   gfx_showbg0(true); // UI/pause
   sys_set_bg_config(
     0, // background #
@@ -765,12 +1117,7 @@ void gvmain() {
   gfx_showobj(true);
   sys_copy_tiles(0, 0, BINADDR(tiles_bin), BINSIZE(tiles_bin));
   sys_copy_tiles(2, 0, BINADDR(ui_bin), BINSIZE(ui_bin));
-  sys_copy_tiles(4, 0, BINADDR(sprites_bin), BINSIZE(sprites_bin));
-  sys_copy_bgpal(0, BINADDR(palette_brightness_bin) + game.brightness * 512, 512);
-  sys_copy_spritepal(0, BINADDR(palette_brightness_bin) + game.brightness * 512, 512);
-  gfx_showscreen(true);
-
-  load_level(1234);
+  palette_fadefromblack();
 
   i32 levelup_cooldown = 0;
   for (;;) {
@@ -805,7 +1152,18 @@ void gvmain() {
       }
       cursor_to_gamesel();
     } else if (g_hit & SYS_INPUT_ST) {
-      pause_menu();
+      i32 p = pause_menu();
+      if (p >= 0 && p <= 4) {
+        // new game
+        palette_fadetoblack();
+        load = p;
+        goto start_game;
+      } else if (p == 5) {
+        // save+quit
+        palette_fadetowhite();
+        save_savedata(false);
+        goto start_title;
+      }
     } else if (g_hit & SYS_INPUT_SE) {
       if (!levelup_cooldown) {
         if (game.exp >= max_exp()) {
@@ -830,15 +1188,18 @@ void gvmain() {
       if (GET_STATUS(game.board[k]) == 0) {
         i32 r = note_menu();
         if (r >= 0) {
+          i8 v;
           if (r < 13) {
-            place_number(game.selx, game.sely, 4, r + 1);
+            v = r + 1;
           } else if (r == 13) { // question mark
-            place_number(game.selx, game.sely, 4, -1);
+            v = -1;
           } else if (r == 14) { // mine
-            place_number(game.selx, game.sely, 4, -2);
+            v = -2;
           } else if (r == 15) { // blank
-            place_number(game.selx, game.sely, 4, -3);
+            v = -3;
           }
+          game.notes[game.selx + game.sely * BOARD_W] = v;
+          place_number(game.selx, game.sely, 4, v);
         }
       } else {
         sfx_bump();

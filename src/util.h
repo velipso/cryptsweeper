@@ -50,4 +50,4 @@ static inline i32 inverse16(i32 n) {
 //   }
 //   chosen_item is a random element uniformly distributed
 //
-static bool random_pick(u32 index, u32 seed);
+bool random_pick(u32 index, u32 seed);

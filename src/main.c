@@ -76,10 +76,10 @@ static i32 tile_info(u32 type, enum tile_info_action action);
 
 // map 0-10 -> 0-16
 static const u16 volume_map_fwd[] SECTION_ROM =
-  {0, 1, 2, 3, 5, 6, 8, 10, 12, 14, 16};
+  {0, 1, 2, 3, 5, 6, 8, 10, 12, 14, 16, 16};
 // map 0-16 -> 0-10
 static const u16 volume_map_back[] SECTION_ROM =
-  {0, 1, 2, 3, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10};
+  {0, 1, 2, 3, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10};
 
 static void SECTION_IWRAM_ARM irq_vblank() {
   sys_copy_oam(g_oam);
@@ -722,8 +722,24 @@ static i32 popup_newgame() {
   return difficulty;
 }
 
+static void set_option_tiles() {
+  #define SETNUM(offset, value) do {            \
+      u16 v = 128 + (value) * 2;                \
+      sys_set_map(0x1c, 288 + offset, v +  0);  \
+      sys_set_map(0x1c, 290 + offset, v +  1);  \
+      sys_set_map(0x1c, 352 + offset, v + 32);  \
+      sys_set_map(0x1c, 354 + offset, v + 33);  \
+    } while (0)
+  SETNUM(0, volume_map_back[game.songvol]);
+  SETNUM(12, volume_map_back[game.sfxvol]);
+  SETNUM(24, game.brightness + 1);
+  #undef SETNUM
+}
+
+static void palette_black(i32 amt);
 static i32 pause_menu() { // -1 for nothing, 0-4 for new game difficulty, 5 = save+quit
   cursor_hide();
+  set_option_tiles();
   g_statsel_x = 0;
   g_statsel_y = 0;
   // -144 to -104 to -24
@@ -808,11 +824,28 @@ static i32 pause_menu() { // -1 for nothing, 0-4 for new game difficulty, 5 = sa
             }
             break;
           }
-          case 2: // music
+          case 2: { // music
+            u16 v = volume_map_back[game.songvol];
+            if (v == 10) v = 0; else v++;
+            game.songvol = volume_map_fwd[v];
+            snd_set_song_volume(game.songvol);
+            set_option_tiles();
+            //snd_set_sfx_volume(game.sfxvol);
             break;
-          case 3: // sfx
+          }
+          case 3: { // sfx
+            u16 v = volume_map_back[game.sfxvol];
+            if (v == 10) v = 0; else v++;
+            game.sfxvol = volume_map_fwd[v];
+            snd_set_sfx_volume(game.sfxvol);
+            sfx_bump();
+            set_option_tiles();
             break;
+          }
           case 4: // brightness
+            if (game.brightness == 9) game.brightness = 0; else game.brightness++;
+            palette_black(8);
+            set_option_tiles();
             break;
         }
       } else {
@@ -960,6 +993,18 @@ static i32 title_screen() { // -1 = continue, 0+ = new game difficulty
   gfx_showbg3(false);
   gfx_showobj(true);
   sys_copy_tiles(0, 0, BINADDR(scr_title_o), BINSIZE(scr_title_o));
+
+  load_savedata();
+  u32 cs = calculate_checksum(&savedata);
+  bool valid_save = savedata.checksum == cs;
+  if (valid_save) {
+    game.brightness = savedata.brightness;
+    game.songvol = savedata.songvol;
+    game.sfxvol = savedata.sfxvol;
+    snd_set_song_volume(game.songvol);
+    snd_set_sfx_volume(game.sfxvol);
+  }
+
   palette_fadefromwhite();
 
   const i32 MENU_Y = 120;
@@ -969,9 +1014,6 @@ static i32 title_screen() { // -1 = continue, 0+ = new game difficulty
   g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
   g_sprites[S_TITLE_START + 0].origin.x = MENU_X;
 
-  load_savedata();
-  u32 cs = calculate_checksum(&savedata);
-  bool valid_save = savedata.checksum == cs;
   i32 menu = 0;
 
   for (;;) {
@@ -1049,9 +1091,9 @@ void gvmain() {
   game.songvol = 6;
   game.sfxvol = 16;
   snd_set_master_volume(16);
+  snd_load_song(BINADDR(song1_gvsong), 2); // silence
   snd_set_song_volume(game.songvol);
   snd_set_sfx_volume(game.sfxvol);
-  snd_load_song(BINADDR(song1_gvsong), 1);
   sys_set_vblank(irq_vblank);
   sys_copy_tiles(4, 0, BINADDR(sprites_bin), BINSIZE(sprites_bin));
   gfx_showscreen(true);
@@ -1195,7 +1237,7 @@ start_game:
             v = -1;
           } else if (r == 14) { // mine
             v = -2;
-          } else if (r == 15) { // blank
+          } else { // r == 15, blank
             v = -3;
           }
           game.notes[game.selx + game.sely * BOARD_W] = v;

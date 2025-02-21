@@ -47,23 +47,26 @@ typedef int32_t  i32;
 #define T_MINE        19
 #define T_WALL        20
 #define T_CHEST_HEAL  21
-#define T_CHEST_EYE   22
+#define T_CHEST_EYE2  22
 #define T_CHEST_EXP   23
 // items:
 #define T_ITEM_HEAL   24
 #define T_ITEM_EYE    25
-#define T_ITEM_SHOW1  26
-#define T_ITEM_SHOW5  27
-#define T_ITEM_EXP1   28
-#define T_ITEM_EXP3   29
-#define T_ITEM_EXP5   30
+#define T_ITEM_EYE2   26
+#define T_ITEM_SHOW1  27
+#define T_ITEM_SHOW5  28
+#define T_ITEM_EXP1   29
+#define T_ITEM_EXP3   30
+#define T_ITEM_EXP5   31
+#define T_ITEM_EXIT   32
 // max of 63
 
 #define GET_TYPE(b)        ((b) & 0x3f)
 #define SET_TYPE(b, s)     b = ((b) & 0xc0) | (s)
 #define GET_STATUS(b)      (((b) >> 6) & 3)
 #define SET_STATUS(b, s)   b = GET_TYPE(b) | ((s) << 6)
-#define IS_ITEM(b)         (GET_TYPE(b) >= T_ITEM_HEAL)
+#define IS_CHEST(b)        (GET_TYPE(b) >= T_CHEST_HEAL && GET_TYPE(b) <= T_CHEST_EXP)
+#define IS_ITEM(b)         (GET_TYPE(b) >= T_ITEM_HEAL && GET_TYPE(b) <= T_ITEM_EXIT)
 
 struct levelgen_ctx {
   u32 rnd_seed;
@@ -81,3 +84,4 @@ static inline void levelgen_seed(struct levelgen_ctx *ctx, u32 seed) {
 
 void levelgen_stage1(struct levelgen_ctx *ctx);
 void levelgen_stage2(struct levelgen_ctx *ctx);
+void levelgen_onlymines(struct levelgen_ctx *ctx, u32 difficulty);

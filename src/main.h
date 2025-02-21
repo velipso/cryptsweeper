@@ -19,6 +19,8 @@ BINFILE(song1_gvsong);
 BINFILE(levels_bin);
 BINFILE(popups_bin);
 BINFILE(scr_title_o);
+BINFILE(scr_winmine_o);
+BINFILE(scr_wingame_o);
 
 void gvmain();
 

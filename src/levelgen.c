@@ -105,7 +105,7 @@ static i32 count_border_chest(struct levelgen_ctx *ctx, i32 x, i32 y) {
       i32 bx = dx + x;
       if (bx < 0 || bx >= BOARD_W) continue;
       u8 type = ctx->board[bx + by];
-      if (type == T_CHEST_HEAL || type == T_CHEST_EYE || type == T_CHEST_EXP || type == T_ITEM_EYE) {
+      if (IS_CHEST(type) || type == T_ITEM_EYE) {
         result++;
       }
     }
@@ -134,7 +134,7 @@ static i32 board_score(struct levelgen_ctx *ctx) {
     for (i32 x = 0; x < BOARD_W; x++, b++) {
       switch (GET_TYPE(ctx->board[b])) {
         case T_ITEM_EYE:
-        case T_CHEST_EYE: {
+        case T_CHEST_EYE2: {
           u32 boundary = GET_TYPE(ctx->board[b]) == T_ITEM_EYE ? 1 : 0;
           u32 heals = 0;
           u32 walls = 0;
@@ -167,7 +167,7 @@ static i32 board_score(struct levelgen_ctx *ctx) {
                   heals++;
                   break;
                 case T_LV13:
-                case T_CHEST_EYE:
+                case T_CHEST_EYE2:
                 case T_ITEM_EYE:
                   score -= 10000;
                   break;
@@ -193,7 +193,7 @@ static i32 board_score(struct levelgen_ctx *ctx) {
         case T_LV6: {
           i32 chests = count_border(ctx, x, y, T_CHEST_HEAL);
           if (chests > 1) break;
-          chests += count_border(ctx, x, y, T_CHEST_EYE);
+          chests += count_border(ctx, x, y, T_CHEST_EYE2);
           if (chests > 1) break;
           chests += count_border(ctx, x, y, T_CHEST_EXP);
           if (chests != 1) break;
@@ -358,7 +358,7 @@ restart:
   level_add(ctx, T_LV5B, 2); // gazer
   level_add(ctx, T_MINE, 9);
   level_add(ctx, T_CHEST_HEAL, 7);
-  level_add(ctx, T_CHEST_EYE, 1);
+  level_add(ctx, T_CHEST_EYE2, 1);
   level_add(ctx, T_ITEM_EYE | 0x80, 1); // collectable at the start
   level_add(ctx, T_CHEST_EXP, 3);
   level_attach_unfixed(ctx);
@@ -387,4 +387,24 @@ void levelgen_stage2(struct levelgen_ctx *ctx) {
   level_add(ctx, T_LV11, 1);
   // TODO: 1 gnome
   level_attach_unfixed(ctx);
+}
+
+void levelgen_onlymines(struct levelgen_ctx *ctx, u32 difficulty) {
+  // beginner: 10/81
+  // intermediate: 40/256
+  // expert: 99/480
+  u8 minecount_table[] = { 16, 18, 20, 22, 26 };
+  u8 minecount = minecount_table[difficulty];
+  for (i32 i = 0; i < minecount; i++) {
+    for (;;) {
+      i32 x = roll(ctx, BOARD_W);
+      i32 y = roll(ctx, BOARD_H);
+      if (x == BOARD_CW && y == BOARD_CH) continue; // never place directly under starting position
+      i32 k = x + y * BOARD_W;
+      if (ctx->board[k] == 0) {
+        ctx->board[k] = T_MINE;
+        break;
+      }
+    }
+  }
 }

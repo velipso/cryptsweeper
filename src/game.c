@@ -5,55 +5,9 @@
 // SPDX-License-Identifier: 0BSD
 //
 
-#include "levelgen.h"
+#include "game.h"
 
-static inline u32 whisky2(u32 i0, u32 i1){
-  u32 z0 = (i1 * 1833778363) ^ i0;
-  u32 z1 = (z0 *  337170863) ^ (z0 >> 13) ^ z0;
-  u32 z2 = (z1 *  620363059) ^ (z1 >> 10);
-  u32 z3 = (z2 *  232140641) ^ (z2 >> 21);
-  return z3;
-}
-
-static inline u32 rnd32(struct levelgen_ctx *ctx) {
-  return whisky2(ctx->rnd_seed, ++ctx->rnd_i);
-}
-
-static u32 roll(struct levelgen_ctx *ctx, u32 sides) { // returns random number from 0 to sides-1
-  switch (sides) {
-    case 0: return 0;
-    case 1: return 0;
-    case 2: return rnd32(ctx) & 1;
-    case 3: {
-      u32 r = rnd32(ctx) & 3;
-      while (r == 3) r = rnd32(ctx) & 3;
-      return r;
-    }
-    case 4: return rnd32(ctx) & 3;
-  }
-  u32 mask = sides - 1;
-  mask |= mask >> 1;
-  mask |= mask >> 2;
-  mask |= mask >> 4;
-  mask |= mask >> 8;
-  mask |= mask >> 16;
-  u32 r = rnd32(ctx) & mask;
-  while (r >= sides) {
-    r = rnd32(ctx) & mask;
-  }
-  return r;
-}
-
-static void shuffle8(struct levelgen_ctx *ctx, u8 *arr, u32 length) {
-  for (u32 i = length - 1; i > 0; i--) {
-    u32 r = roll(ctx, i + 1);
-    u32 temp = arr[i];
-    arr[i] = arr[r];
-    arr[r] = temp;
-  }
-}
-
-static i32 count_border(struct levelgen_ctx *ctx, i32 x, i32 y, u32 type) {
+static i32 count_border(struct levelgen_st *ctx, i32 x, i32 y, u32 type) {
   i32 result = 0;
   #define CHECK(dx, dy)  do {                                   \
       if (ctx->board[(x + dx) + (y + dy) * BOARD_W] == type) {  \
@@ -76,7 +30,7 @@ static i32 count_border(struct levelgen_ctx *ctx, i32 x, i32 y, u32 type) {
   #undef CHECK
 }
 
-static i32 count_border_rad(struct levelgen_ctx *ctx, i32 x, i32 y, i32 rad, u32 type) {
+static i32 count_border_rad(struct levelgen_st *ctx, i32 x, i32 y, i32 rad, u32 type) {
   i32 result = 0;
   for (i32 dy = -rad; dy <= rad; dy++) {
     i32 by = dy + y;
@@ -94,7 +48,7 @@ static i32 count_border_rad(struct levelgen_ctx *ctx, i32 x, i32 y, i32 rad, u32
   return result;
 }
 
-static i32 count_border_chest(struct levelgen_ctx *ctx, i32 x, i32 y) {
+static i32 count_border_chest(struct levelgen_st *ctx, i32 x, i32 y) {
   i32 result = 0;
   for (i32 dy = -3; dy <= 3; dy++) {
     i32 by = dy + y;
@@ -113,7 +67,7 @@ static i32 count_border_chest(struct levelgen_ctx *ctx, i32 x, i32 y) {
   return result;
 }
 
-static i32 count_touching(struct levelgen_ctx *ctx, i32 x, i32 y, u32 type) {
+static i32 count_touching(struct levelgen_st *ctx, i32 x, i32 y, u32 type) {
   i32 result = 0;
   #define CHECK(dx, dy)  do {                                   \
       if (ctx->board[(x + dx) + (y + dy) * BOARD_W] == type) {  \
@@ -128,7 +82,7 @@ static i32 count_touching(struct levelgen_ctx *ctx, i32 x, i32 y, u32 type) {
   #undef CHECK
 }
 
-static i32 board_score(struct levelgen_ctx *ctx) {
+static i32 board_score(struct levelgen_st *ctx) {
   i32 score = 0;
   for (i32 y = 0, b = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++, b++) {
@@ -239,7 +193,7 @@ static i32 board_score(struct levelgen_ctx *ctx) {
   return score;
 }
 
-static void level_attach_unfixed(struct levelgen_ctx *ctx) {
+static void level_attach_unfixed(struct levelgen_st *ctx) {
   for (i32 k = 0; k < 4; k++) {
     for (i32 i = 0; i < ctx->unfixed_size; i++) {
       i32 best_score = board_score(ctx);
@@ -268,7 +222,7 @@ static void level_attach_unfixed(struct levelgen_ctx *ctx) {
   ctx->unfixed_size = 0;
 }
 
-static void level_add(struct levelgen_ctx *ctx, u32 type, u32 count) {
+static void level_add(struct levelgen_st *ctx, u32 type, u32 count) {
   for (i32 i = 0; i < BOARD_SIZE; i++) {
     u8 b = ctx->board_order[i];
     if (ctx->board[b] == T_EMPTY) {
@@ -282,11 +236,11 @@ static void level_add(struct levelgen_ctx *ctx, u32 type, u32 count) {
   }
 }
 
-void levelgen_stage1(struct levelgen_ctx *ctx) {
+void levelgen_stage1(struct levelgen_st *ctx) {
   for (i32 i = 0; i < BOARD_SIZE; i++) {
     ctx->board_order[i] = i;
   }
-  shuffle8(ctx, ctx->board_order, BOARD_SIZE);
+  shuffle8(&ctx->rnd, ctx->board_order, BOARD_SIZE);
 restart:
   for (i32 i = 0; i < BOARD_SIZE; i++) {
     ctx->board[i] = 0;
@@ -296,16 +250,16 @@ restart:
   // place easy items directly
   {
     // lv13 is in the center
-    u32 bx = roll(ctx, 2) + BOARD_CW;
-    u32 by = roll(ctx, 3) + BOARD_CH - 1;
+    u32 bx = roll(&ctx->rnd, 2) + BOARD_CW;
+    u32 by = roll(&ctx->rnd, 3) + BOARD_CH - 1;
     ctx->board[bx + by * BOARD_W] = T_LV13;
 
     // lv1b is always on the edge, surrounded by lv8's
-    switch (roll(ctx, 4)) {
-      case 0: bx = 0; by = roll(ctx, BOARD_H - 2) + 1; break;
-      case 1: bx = BOARD_W - 1; by = roll(ctx, BOARD_H - 2) + 1; break;
-      case 2: bx = roll(ctx, BOARD_W - 2) + 1; by = 0; break;
-      case 3: bx = roll(ctx, BOARD_W - 2) + 1; by = BOARD_H - 1; break;
+    switch (roll(&ctx->rnd, 4)) {
+      case 0: bx = 0; by = roll(&ctx->rnd, BOARD_H - 2) + 1; break;
+      case 1: bx = BOARD_W - 1; by = roll(&ctx->rnd, BOARD_H - 2) + 1; break;
+      case 2: bx = roll(&ctx->rnd, BOARD_W - 2) + 1; by = 0; break;
+      case 3: bx = roll(&ctx->rnd, BOARD_W - 2) + 1; by = BOARD_H - 1; break;
     }
     ctx->board[bx + by * BOARD_W] = T_LV1B;
     for (i32 dy = -1; dy <= 1; dy++) {
@@ -320,7 +274,7 @@ restart:
 
     // lv10 is always in a corner
     for (;;) {
-      switch (roll(ctx, 4)) {
+      switch (roll(&ctx->rnd, 4)) {
         case 0: bx = 0; by = 0; break;
         case 1: bx = BOARD_W - 1; by = 0; break;
         case 2: bx = 0; by = BOARD_H - 1; break;
@@ -334,10 +288,10 @@ restart:
 
     // two lv9's are always mirrored
     for (;;) {
-      u32 bx = roll(ctx, BOARD_CW - 2) + 1;
+      u32 bx = roll(&ctx->rnd, BOARD_CW - 2) + 1;
       u32 bx1 = BOARD_CW - 1 - bx;
       u32 bx2 = BOARD_CW + bx;
-      u32 by = roll(ctx, BOARD_H);
+      u32 by = roll(&ctx->rnd, BOARD_H);
       u32 k1 = bx1 + by * BOARD_W;
       u32 k2 = bx2 + by * BOARD_W;
       if (ctx->board[k1] || ctx->board[k2]) continue;
@@ -373,11 +327,11 @@ restart:
   }
 }
 
-void levelgen_stage2(struct levelgen_ctx *ctx) {
+void levelgen_stage2(struct levelgen_st *ctx) {
   for (i32 i = 0; i < BOARD_SIZE; i++) {
     ctx->board_order[i] = i;
   }
-  shuffle8(ctx, ctx->board_order, BOARD_SIZE);
+  shuffle8(&ctx->rnd, ctx->board_order, BOARD_SIZE);
   ctx->unfixed_size = 0;
 
   level_add(ctx, T_LV1A, 12); // rat
@@ -389,7 +343,7 @@ void levelgen_stage2(struct levelgen_ctx *ctx) {
   level_attach_unfixed(ctx);
 }
 
-void levelgen_onlymines(struct levelgen_ctx *ctx, u32 difficulty) {
+void levelgen_onlymines(struct levelgen_st *ctx, u32 difficulty) {
   // beginner: 10/81
   // intermediate: 40/256
   // expert: 99/480
@@ -397,8 +351,8 @@ void levelgen_onlymines(struct levelgen_ctx *ctx, u32 difficulty) {
   u8 minecount = minecount_table[difficulty];
   for (i32 i = 0; i < minecount; i++) {
     for (;;) {
-      i32 x = roll(ctx, BOARD_W);
-      i32 y = roll(ctx, BOARD_H);
+      i32 x = roll(&ctx->rnd, BOARD_W);
+      i32 y = roll(&ctx->rnd, BOARD_H);
       if (x == BOARD_CW && y == BOARD_CH) continue; // never place directly under starting position
       i32 k = x + y * BOARD_W;
       if (ctx->board[k] == 0) {

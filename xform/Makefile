@@ -12,7 +12,7 @@ CC        := gcc
 MKDIR     := mkdir
 RM        := rm -rf
 CFLAGS    := -Wall -O3
-SOURCES_C := $(wildcard $(SRC)/*.c $(SRC)/**/*.c) $(TGT)/levelgen.c
+SOURCES_C := $(wildcard $(SRC)/*.c $(SRC)/**/*.c) $(TGT)/game.c $(TGT)/rnd.c
 LDFLAGS   := -lm
 OBJS      := $(patsubst $(SRC)/%.c,$(TGT)/%.c.o,$(SOURCES_C))
 DEPS      := $(OBJS:.o=.d)
@@ -25,10 +25,13 @@ $(TGT)/%.c.o : $(SRC)/%.c
 
 all: $(TGT)/$(NAME)
 
-$(TGT)/levelgen.c \
-$(TGT)/levelgen.h: ./../src/levelgen.c ./../src/levelgen.h
+$(TGT)/game.c \
+$(TGT)/game.h \
+$(TGT)/rnd.c \
+$(TGT)/rnd.h: ./../src/game.c ./../src/game.h ./../src/rnd.c ./../src/rnd.h
 	$(MKDIR) -p $(@D)
-	cp ./../src/levelgen.c ./../src/levelgen.h $(@D)
+	cp ./../src/game.c ./../src/game.h $(@D)
+	cp ./../src/rnd.c ./../src/rnd.h $(@D)
 
 $(TGT)/$(NAME): $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LDFLAGS)

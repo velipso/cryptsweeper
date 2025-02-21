@@ -9,7 +9,9 @@
 // This library is stand-alone so it can be called from either the GBA or xform at compile-time
 //
 
+#pragma once
 #include <stdint.h>
+#include "rnd.h"
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -23,6 +25,33 @@ typedef int32_t  i32;
 #define BOARD_H     9
 #define BOARD_CH    (BOARD_H >> 1)
 #define BOARD_SIZE  (BOARD_W * BOARD_H)
+
+struct game_st {
+  struct rnd_st rnd;
+  i8 selx;
+  i8 sely;
+  u8 difficulty;
+  u8 level;
+  u8 hp;
+  u8 exp;
+  u8 win; // 0 = play, 1 = dead, 2 = win
+  i8 notes[BOARD_SIZE];
+  u8 board[BOARD_SIZE];
+  // SSTT:TTTT
+  // where SS is status:
+  //   00 - unpressed, hidden
+  //   01 - unpressed, visible
+  //   10 - pressed (if not empty, then collectable)
+  // and TT is type (0-63)
+};
+
+struct levelgen_st {
+  struct rnd_st rnd;
+  u32 unfixed_size;
+  u8 board_order[BOARD_SIZE];
+  u8 board[BOARD_SIZE];
+  u8 unfixed[BOARD_SIZE];
+};
 
 // entity types
 #define T_EMPTY       0
@@ -61,6 +90,10 @@ typedef int32_t  i32;
 #define T_ITEM_EXIT   32
 // max of 63
 
+#define S_HIDDEN      0
+#define S_VISIBLE     1
+#define S_PRESSED     2
+
 #define GET_TYPE(b)        ((b) & 0x3f)
 #define SET_TYPE(b, s)     b = ((b) & 0xc0) | (s)
 #define GET_STATUS(b)      (((b) >> 6) & 3)
@@ -68,20 +101,10 @@ typedef int32_t  i32;
 #define IS_CHEST(b)        (GET_TYPE(b) >= T_CHEST_HEAL && GET_TYPE(b) <= T_CHEST_EXP)
 #define IS_ITEM(b)         (GET_TYPE(b) >= T_ITEM_HEAL && GET_TYPE(b) <= T_ITEM_EXIT)
 
-struct levelgen_ctx {
-  u32 rnd_seed;
-  u32 rnd_i;
-  u32 unfixed_size;
-  u8 board_order[BOARD_SIZE];
-  u8 board[BOARD_SIZE];
-  u8 unfixed[BOARD_SIZE];
-};
-
-static inline void levelgen_seed(struct levelgen_ctx *ctx, u32 seed) {
-  ctx->rnd_seed = seed;
-  ctx->rnd_i = 1;
+static inline void levelgen_seed(struct levelgen_st *ctx, u32 seed) {
+  rnd_seed(&ctx->rnd, seed);
 }
 
-void levelgen_stage1(struct levelgen_ctx *ctx);
-void levelgen_stage2(struct levelgen_ctx *ctx);
-void levelgen_onlymines(struct levelgen_ctx *ctx, u32 difficulty);
+void levelgen_stage1(struct levelgen_st *ctx);
+void levelgen_stage2(struct levelgen_st *ctx);
+void levelgen_onlymines(struct levelgen_st *ctx, u32 difficulty);

@@ -10,8 +10,8 @@
 #include "ani.h"
 #include "anidata.h"
 #include "sfx.h"
-#include "util.h"
-#include "levelgen.h"
+#include "rnd.h"
+#include "game.h"
 
 #define S_POPUPCUR     0
 #define S_POPUP        1
@@ -38,36 +38,21 @@ static i32 g_cursor_y;
 static i32 g_statsel_x;
 static i32 g_statsel_y;
 
-struct game_st {
+struct save_st {
   u32 checksum;
-  u32 seed;
-  u32 rnd;
   u32 books;
   u8 songvol;
   u8 sfxvol;
   u8 brightness;
-  i8 selx;
-  i8 sely;
-  u8 difficulty;
-  u8 level;
-  u8 hp;
-  u8 exp;
-  u8 win; // 0 = play, 1 = dead, 2 = win
-  i8 notes[BOARD_SIZE];
-  u8 board[BOARD_SIZE];
-  // SSTT:TTTT
-  // where SS is status:
-  //   00 - unpressed, hidden
-  //   01 - unpressed, visible
-  //   10 - pressed (if not empty, then collectable)
-  // and TT is type (0-63)
+  u8 reserved;
+  struct game_st game;
 };
 
-struct game_st game;
-struct game_st savedata SECTION_EWRAM;
+struct save_st saveroot;
+static struct game_st *const game = &saveroot.game;
+struct save_st savecopy SECTION_EWRAM;
 u8 *const saveaddr = (u8 *)0x0e000000;
-u32 rnd_seed = 1;
-u32 rnd_i = 1;
+struct rnd_st g_rnd = { 1, 1 };
 
 enum tile_info_action {
   TI_ICON,
@@ -96,7 +81,7 @@ static void SECTION_IWRAM_ARM irq_vblank() {
   u32 inp = sys_input() ^ 0x3ff;
   g_hit = ~g_down & inp;
   g_down = inp;
-  rnd_seed = whisky2(rnd_seed, inp);
+  g_rnd.seed = whisky2(g_rnd.seed, inp);
   if (g_shake) {
     g_shake_frame++;
     if (g_shake_frame >= 4) {
@@ -104,7 +89,7 @@ static void SECTION_IWRAM_ARM irq_vblank() {
       g_shake_frame = 0;
       i32 amt = 0;
       if (g_shake) {
-        amt += (rnd_seed & 3) + 1;
+        amt += (g_rnd.seed & 3) + 1;
         if (g_shake & 1) amt = -amt;
       }
       sys_set_bgt3_scroll(8 + amt, 13);
@@ -114,32 +99,32 @@ static void SECTION_IWRAM_ARM irq_vblank() {
   }
 }
 
-static u32 calculate_checksum(struct game_st *g) {
+static u32 calculate_checksum(struct save_st *g) {
   u32 old_checksum = g->checksum;
   g->checksum = 0;
   u32 checksum = 123;
   const u8 *d = (const u8 *)g;
-  for (i32 i = 0; i < sizeof(struct game_st); i++, d++) {
+  for (i32 i = 0; i < sizeof(struct save_st); i++, d++) {
     checksum = whisky2(checksum, *d);
   }
   g->checksum = old_checksum;
   return checksum;
 }
 
-static void load_savedata() {
-  memcpy8(&savedata, saveaddr, sizeof(struct game_st));
+static void load_savecopy() {
+  memcpy8(&savecopy, saveaddr, sizeof(struct save_st));
 }
 
-static inline void save_savedata(bool del) {
+static inline void save_savecopy(bool del) {
   if (!del) {
-    memcpy8(&savedata, &game, sizeof(struct game_st));
+    memcpy8(&savecopy, &saveroot, sizeof(struct save_st));
   }
-  savedata.checksum = calculate_checksum(&savedata);
+  savecopy.checksum = calculate_checksum(&savecopy);
   if (del) {
     // if deleting, corrupt the checksum
-    savedata.checksum ^= 0xaa55a5a5;
+    savecopy.checksum ^= 0xaa55a5a5;
   }
-  memcpy8(saveaddr, &savedata, sizeof(struct game_st));
+  memcpy8(saveaddr, &savecopy, sizeof(struct save_st));
 }
 
 static void nextframe() {
@@ -224,7 +209,7 @@ static void clear_answer(i32 x, i32 y) {
 
 static void place_answer(i32 x, i32 y, i32 frame) {
   frame *= 2;
-  u32 t = board_type_to_tile(game.board[x + y * BOARD_W]);
+  u32 t = board_type_to_tile(game->board[x + y * BOARD_W]);
   u32 offset = (x + 1) * 4 + (y + 1) * 128;
   if (t == 0) {
     sys_set_map(0x1e, offset +  0, 0);
@@ -254,7 +239,7 @@ static void place_floor(i32 x, i32 y, i32 state) {
 
 static i32 threat_at(i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return 0;
-  i32 res = tile_info(game.board[x + y * BOARD_W], TI_THREAT);
+  i32 res = tile_info(game->board[x + y * BOARD_W], TI_THREAT);
   if (res < 0) {
     return 0;
   }
@@ -276,7 +261,7 @@ static i32 count_threat(i32 x, i32 y) {
 static void place_threat(i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return;
   i32 threat = count_threat(x, y);
-  if (game.difficulty & D_ONLYMINES) {
+  if (game->difficulty & D_ONLYMINES) {
     threat >>= 8;
     place_number(x, y, 0, threat == 0 ? -3 : threat);
   } else {
@@ -311,8 +296,8 @@ static void cursor_pause() {
 }
 
 static void cursor_to_gamesel_offset(i32 dx, i32 dy) {
-  g_cursor_x = game.selx * 16 + 8 + dx;
-  g_cursor_y = game.sely * 16 + 3 + dy;
+  g_cursor_x = game->selx * 16 + 8 + dx;
+  g_cursor_y = game->sely * 16 + 3 + dy;
   g_sprites[S_CURSOR1].origin.x = g_cursor_x;
   g_sprites[S_CURSOR1].origin.y = g_cursor_y;
   g_sprites[S_CURSOR2].origin.x = g_cursor_x + 16;
@@ -391,7 +376,7 @@ static void place_statnum(u8 cur, u8 max, i32 x, const u16 *pc[], i32 end_spr) {
 
 static i32 max_hp();
 static void place_hp() {
-  u8 cur = game.hp;
+  u8 cur = game->hp;
   u8 max = max_hp();
   const i32 hp_x = 37;
   const i32 hp_y = 149;
@@ -491,29 +476,29 @@ static void place_expnum(u8 cur, u8 max) {
 
 static i32 max_hp() {
   static const i32 table[] = {5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12};
-  if (game.level < 16) {
-    return table[game.level];
+  if (game->level < 16) {
+    return table[game->level];
   }
   return 13;
 }
 
 static i32 max_exp() {
   static const i32 table[] = {4, 5, 7, 9, 9, 10, 12, 12, 12, 15, 18, 21, 21, 25};
-  if (game.level < 14) {
-    return table[game.level];
+  if (game->level < 14) {
+    return table[game->level];
   }
   return 25;
 }
 
 static void award_exp(i32 amt) {
   i32 mxp = max_exp();
-  bool before = game.exp < mxp;
-  game.exp += amt;
-  place_expnum(game.exp, mxp);
-  bool after = game.exp < mxp;
+  bool before = game->exp < mxp;
+  game->exp += amt;
+  place_expnum(game->exp, mxp);
+  bool after = game->exp < mxp;
   if (before) {
     if (after) {
-      place_expicons(game.exp, mxp);
+      place_expicons(game->exp, mxp);
     } else {
       place_explevelup();
     }
@@ -558,13 +543,13 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
 
 static void load_level(u32 diff, u32 seed) {
   // reset character
-  game.level = 0;
-  game.hp = max_hp();
-  game.exp = 0;
-  game.difficulty = diff;
-  game.win = 0;
+  game->level = 0;
+  game->hp = max_hp();
+  game->exp = 0;
+  game->difficulty = diff;
+  game->win = 0;
 
-  struct levelgen_ctx *ctx = malloc(sizeof(struct levelgen_ctx));
+  struct levelgen_st *ctx = malloc(sizeof(struct levelgen_st));
   levelgen_seed(ctx, seed);
 
   if (diff & D_ONLYMINES) {
@@ -580,18 +565,18 @@ static void load_level(u32 diff, u32 seed) {
     levelgen_stage2(ctx);
   }
 
-  game.selx = BOARD_CW;
-  game.sely = BOARD_CH;
+  game->selx = BOARD_CW;
+  game->sely = BOARD_CH;
   for (i32 y = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++) {
       i32 i = x + y * BOARD_W;
-      game.notes[i] = -3;
-      game.board[i] = ctx->board[i];
-      if (GET_TYPE(game.board[i]) == T_LV13) {
-        SET_STATUS(game.board[i], 1);
-      } else if (GET_TYPE(game.board[i]) == T_ITEM_EYE) {
-        game.selx = x;
-        game.sely = y;
+      game->notes[i] = -3;
+      game->board[i] = ctx->board[i];
+      if (GET_TYPE(game->board[i]) == T_LV13) {
+        SET_STATUS(game->board[i], S_VISIBLE);
+      } else if (GET_TYPE(game->board[i]) == T_ITEM_EYE) {
+        game->selx = x;
+        game->sely = y;
       }
     }
   }
@@ -648,7 +633,7 @@ static void draw_level() {
   sys_copy_tiles(0, 0, BINADDR(tiles_bin), BINSIZE(tiles_bin));
   sys_copy_tiles(2, 0, BINADDR(ui_bin), BINSIZE(ui_bin));
 
-  if (game.win) {
+  if (game->win) {
     cursor_hide();
   } else {
     cursor_to_gamesel();
@@ -671,26 +656,26 @@ static void draw_level() {
       } else {
         // place background tile
         u32 k = x + y * BOARD_W;
-        u8 t = game.board[k];
+        u8 t = game->board[k];
         switch (GET_STATUS(t)) {
-          case 0:
+          case S_HIDDEN:
             place_floor(x, y, 0);
-            if (game.win) {
+            if (game->win) {
               place_answer(x, y, 0);
               place_number(x, y, 0, -3);
             } else {
               clear_answer(x, y);
-              place_number(x, y, 4, game.notes[k]);
+              place_number(x, y, 4, game->notes[k]);
             }
             place_minehint(x, y, 0);
             break;
-          case 1:
+          case S_VISIBLE:
             place_floor(x, y, 0);
             place_answer(x, y, 0);
             place_number(x, y, 0, -3);
             place_minehint(x, y, 0);
             break;
-          case 2:
+          case S_PRESSED:
             if (GET_TYPE(t) == T_EMPTY) {
               place_floor(x, y, 2);
               place_threat(x, y);
@@ -716,7 +701,7 @@ static void draw_level() {
   sys_set_bgt0_scroll(4, -144);
   sys_copy_map(0x1c, 0, stat_tiles_top, sizeof(stat_tiles_top));
   sys_copy_map(0x1c, sizeof(stat_tiles_top), stat_tiles_bot0, sizeof(stat_tiles_bot0));
-  if (game.difficulty & D_ONLYMINES) {
+  if (game->difficulty & D_ONLYMINES) {
     // remove hp/exp display entirely
     for (i32 i = 0; i < 128; i += 2) {
       sys_set_map(0x1c, 128 + i, i < 64 ? 33 : 34);
@@ -726,11 +711,11 @@ static void draw_level() {
     }
   } else {
     place_hp();
-    place_expnum(game.exp, max_exp());
-    if (!game.win && game.exp >= max_exp()) {
+    place_expnum(game->exp, max_exp());
+    if (!game->win && game->exp >= max_exp()) {
       place_explevelup();
     } else {
-      place_expicons(game.exp, max_exp());
+      place_expicons(game->exp, max_exp());
     }
   }
 }
@@ -739,7 +724,7 @@ static void draw_books() {
   for (i32 y = 0; y < 3; y++) {
     for (i32 x = 0; x < 10; x++) {
       u32 bit = 1 << (x + y * 10);
-      if (game.books & bit) {
+      if (saveroot.books & bit) {
         u32 offset = 450 + x * 6 + y * 192;
         u32 t = x * 2 + (y + 3) * 64;
         u32 color = 1; // 0, 1, 2; TODO: lookup book color
@@ -815,7 +800,7 @@ static i32 popup_newgame() {
   popup_show(31, 40);
   g_sprites[S_POPUPCUR].pc = ani_arrowr;
   g_sprites[S_POPUPCUR].origin.x = 97;
-  i32 difficulty = game.difficulty & D_DIFFICULTY;
+  i32 difficulty = game->difficulty & D_DIFFICULTY;
   for (;;) {
     g_sprites[S_POPUPCUR].origin.y = 51 + difficulty * 9;
     nextframe();
@@ -850,16 +835,16 @@ static void set_option_tiles() {
       sys_set_map(0x1c, 352 + offset, v + 32);  \
       sys_set_map(0x1c, 354 + offset, v + 33);  \
     } while (0)
-  SETNUM(0, volume_map_back[game.songvol]);
-  SETNUM(12, volume_map_back[game.sfxvol]);
-  SETNUM(24, game.brightness + 1);
+  SETNUM(0, volume_map_back[saveroot.songvol]);
+  SETNUM(12, volume_map_back[saveroot.sfxvol]);
+  SETNUM(24, saveroot.brightness + 1);
   #undef SETNUM
 }
 
 
 static void palette_black(i32 amt) {
   u16 *pal = malloc(512);
-  const u16 *inp = BINADDR(palette_brightness_bin) + game.brightness * 512;
+  const u16 *inp = BINADDR(palette_brightness_bin) + saveroot.brightness * 512;
   for (i32 i = 0; i < 256; i++) {
     u16 c = inp[i];
     i32 r = c & 0x1f;
@@ -877,7 +862,7 @@ static void palette_black(i32 amt) {
 
 static void palette_white(i32 amt) {
   u16 *pal = malloc(512);
-  const u16 *inp = BINADDR(palette_brightness_bin) + game.brightness * 512;
+  const u16 *inp = BINADDR(palette_brightness_bin) + saveroot.brightness * 512;
   for (i32 i = 0; i < 256; i++) {
     u16 c = inp[i];
     i32 r = c & 0x1f;
@@ -1027,25 +1012,25 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
             break;
           }
           case 2: { // music
-            u16 v = volume_map_back[game.songvol];
+            u16 v = volume_map_back[saveroot.songvol];
             if (v == 10) v = 0; else v++;
-            game.songvol = volume_map_fwd[v];
-            snd_set_song_volume(game.songvol);
+            saveroot.songvol = volume_map_fwd[v];
+            snd_set_song_volume(saveroot.songvol);
             set_option_tiles();
-            //snd_set_sfx_volume(game.sfxvol);
             break;
           }
           case 3: { // sfx
-            u16 v = volume_map_back[game.sfxvol];
+            u16 v = volume_map_back[saveroot.sfxvol];
             if (v == 10) v = 0; else v++;
-            game.sfxvol = volume_map_fwd[v];
-            snd_set_sfx_volume(game.sfxvol);
+            saveroot.sfxvol = volume_map_fwd[v];
+            snd_set_sfx_volume(saveroot.sfxvol);
             sfx_bump();
             set_option_tiles();
             break;
           }
           case 4: // brightness
-            if (game.brightness == 9) game.brightness = 0; else game.brightness++;
+            if (saveroot.brightness == 9) saveroot.brightness = 0;
+            else saveroot.brightness++;
             palette_black(8);
             set_option_tiles();
             break;
@@ -1069,7 +1054,7 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
     nextframe();
     sys_set_bgt0_scroll(4, pos);
   }
-  if (!game.win) {
+  if (!game->win) {
     cursor_to_gamesel();
     cursor_show();
   }
@@ -1079,13 +1064,13 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
 static i32 note_menu() {
   i32 mx = 0, my = 0;
   i32 popx = 0;
-  i32 popy = game.sely * 16 - 18;
+  i32 popy = game->sely * 16 - 18;
   if (popy < 1) popy = 1;
   if (popy > 91) popy = 91;
-  if (game.selx < BOARD_CW) {
-    popx = game.selx * 16 + 29;
+  if (game->selx < BOARD_CW) {
+    popx = game->selx * 16 + 29;
   } else {
-    popx = game.selx * 16 - 60;
+    popx = game->selx * 16 - 60;
   }
   cursor_pause();
   g_sprites[S_POPUP].pc = ani_note;
@@ -1124,16 +1109,16 @@ static void check_onlymines() {
   for (i32 i = 0; i < BOARD_SIZE; i++) {
     board[i] = 0;
   }
-  i32 selx = game.selx;
-  i32 sely = game.sely;
-  board[game.selx + game.sely * BOARD_W] = 2;
+  i32 selx = game->selx;
+  i32 sely = game->sely;
+  board[game->selx + game->sely * BOARD_W] = 2;
   for (;;) {
     for (i32 y = 0, k = 0; y < BOARD_H; y++) {
       for (i32 x = 0; x < BOARD_W; x++, k++) {
         if (board[k] == 2) {
           board[k] = 3;
           bool pt = false;
-          if (game.board[k] == T_EMPTY) {
+          if (game->board[k] == T_EMPTY) {
             if (count_threat(x, y) == 0) {
               for (i32 dy = -1; dy <= 1; dy++) {
                 i32 by = dy + y;
@@ -1150,10 +1135,10 @@ static void check_onlymines() {
               pt = true;
             }
           }
-          game.selx = x;
-          game.sely = y;
-          SET_STATUS(game.board[k], 2);
-          tile_info(game.board[k], TI_ATTACK);
+          game->selx = x;
+          game->sely = y;
+          SET_STATUS(game->board[k], S_PRESSED);
+          tile_info(game->board[k], TI_ATTACK);
           if (pt) place_threat(x, y);
         }
       }
@@ -1168,15 +1153,15 @@ static void check_onlymines() {
     if (!found) break;
     nextframe();
   }
-  game.selx = selx;
-  game.sely = sely;
+  game->selx = selx;
+  game->sely = sely;
 
   // check if we won
-  if (!game.win) {
+  if (!game->win) {
     bool won = true;
     for (i32 y = 0, k = 0; y < BOARD_H; y++) {
       for (i32 x = 0; x < BOARD_W; x++, k++) {
-        if (game.board[k] == T_EMPTY) {
+        if (game->board[k] == T_EMPTY) {
           won = false;
         }
       }
@@ -1190,15 +1175,15 @@ static void check_onlymines() {
 static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
   load_scr(scr_title_o);
 
-  load_savedata();
-  u32 cs = calculate_checksum(&savedata);
-  bool valid_save = savedata.checksum == cs;
+  load_savecopy();
+  u32 cs = calculate_checksum(&savecopy);
+  bool valid_save = savecopy.checksum == cs;
   if (valid_save) {
-    game.brightness = savedata.brightness;
-    game.songvol = savedata.songvol;
-    game.sfxvol = savedata.sfxvol;
-    snd_set_song_volume(game.songvol);
-    snd_set_sfx_volume(game.sfxvol);
+    saveroot.brightness = savecopy.brightness;
+    saveroot.songvol = savecopy.songvol;
+    saveroot.sfxvol = savecopy.sfxvol;
+    snd_set_song_volume(saveroot.songvol);
+    snd_set_sfx_volume(saveroot.sfxvol);
   }
 
   palette_fadefromwhite();
@@ -1251,7 +1236,7 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
         g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
         if (del) {
           // delete!
-          save_savedata(true);
+          save_savecopy(true);
           valid_save = false;
           menu = 0;
         }
@@ -1286,12 +1271,12 @@ static void move_game_cursor(i32 dx, i32 dy) {
   nextframe();
   cursor_to_gamesel_offset(dx * 2, dy * 2);
   nextframe();
-  game.selx += dx;
-  if (game.selx < 0) game.selx = BOARD_W - 1;
-  if (game.selx >= BOARD_W) game.selx = 0;
-  game.sely += dy;
-  if (game.sely < 0) game.sely = BOARD_H - 1;
-  if (game.sely >= BOARD_H) game.sely = 0;
+  game->selx += dx;
+  if (game->selx < 0) game->selx = BOARD_W - 1;
+  if (game->selx >= BOARD_W) game->selx = 0;
+  game->sely += dy;
+  if (game->sely < 0) game->sely = BOARD_H - 1;
+  if (game->sely >= BOARD_H) game->sely = 0;
   cursor_to_gamesel_offset(-dx * 2, -dy * 2);
   nextframe();
   cursor_to_gamesel_offset(-dx, -dy);
@@ -1301,13 +1286,13 @@ static void move_game_cursor(i32 dx, i32 dy) {
 
 void gvmain() {
   sys_init();
-  game.brightness = 2;
-  game.songvol = 6;
-  game.sfxvol = 16;
+  saveroot.brightness = 2;
+  saveroot.songvol = 6;
+  saveroot.sfxvol = 16;
   snd_set_master_volume(16);
   snd_load_song(BINADDR(song1_gvsong), 2); // silence
-  snd_set_song_volume(game.songvol);
-  snd_set_sfx_volume(game.sfxvol);
+  snd_set_song_volume(saveroot.songvol);
+  snd_set_sfx_volume(saveroot.sfxvol);
   sys_set_vblank(irq_vblank);
   sys_copy_tiles(4, 0, BINADDR(sprites_bin), BINSIZE(sprites_bin));
   gfx_showscreen(true);
@@ -1317,10 +1302,10 @@ start_title:
   load = title_screen();
 start_game:
   if (load < 0) {
-    memcpy8(&game, &savedata, sizeof(struct game_st));
+    memcpy8(&saveroot, &savecopy, sizeof(struct game_st));
     draw_level();
   } else {
-    load_level(load, rnd32());
+    load_level(load, rnd32(&g_rnd));
     draw_level();
   }
   palette_fadefromblack();
@@ -1329,7 +1314,7 @@ start_game:
   for (;;) {
     if (levelup_cooldown > 0) levelup_cooldown--;
     nextframe();
-    if (game.win) {
+    if (game->win) {
       // dead or won
       if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
         i32 diff = popup_newgame();
@@ -1351,29 +1336,29 @@ start_game:
         move_game_cursor(-1, 0);
       } else if (g_hit & SYS_INPUT_SE) {
         if (!levelup_cooldown) {
-          if (game.exp >= max_exp()) {
+          if (game->exp >= max_exp()) {
             // level up!
             levelup_cooldown = 30;
-            game.exp -= max_exp();
-            game.level++;
-            game.hp = max_hp();
+            game->exp -= max_exp();
+            game->level++;
+            game->hp = max_hp();
             place_hp();
-            place_expnum(game.exp, max_exp());
-            if (game.exp >= max_exp()) {
+            place_expnum(game->exp, max_exp());
+            if (game->exp >= max_exp()) {
               place_explevelup();
             } else {
-              place_expicons(game.exp, max_exp());
+              place_expicons(game->exp, max_exp());
             }
           } else {
             sfx_bump();
           }
         }
       } else if (g_hit & SYS_INPUT_B) {
-        u32 k = game.selx + game.sely * BOARD_W;
-        if (GET_STATUS(game.board[k]) == 0) {
-          i32 k = game.selx + game.sely * BOARD_W;
-          i32 r = game.notes[k] == -2 ? 15 : 14; // toggle mine/blank
-          if (!(game.difficulty & D_ONLYMINES)) {
+        u32 k = game->selx + game->sely * BOARD_W;
+        if (GET_STATUS(game->board[k]) == S_HIDDEN) {
+          i32 k = game->selx + game->sely * BOARD_W;
+          i32 r = game->notes[k] == -2 ? 15 : 14; // toggle mine/blank
+          if (!(game->difficulty & D_ONLYMINES)) {
             r = note_menu();
           }
           if (r >= 0) {
@@ -1387,17 +1372,17 @@ start_game:
             } else { // r == 15, blank
               v = -3;
             }
-            game.notes[k] = v;
-            place_number(game.selx, game.sely, 4, v);
+            game->notes[k] = v;
+            place_number(game->selx, game->sely, 4, v);
           }
         } else {
           sfx_bump();
         }
       } else if (g_hit & SYS_INPUT_A) {
-        u32 k = game.selx + game.sely * BOARD_W;
-        if (game.difficulty & D_ONLYMINES) {
-          if (GET_STATUS(game.board[k]) != 2) {
-            if (game.notes[k] == -2) {
+        u32 k = game->selx + game->sely * BOARD_W;
+        if (game->difficulty & D_ONLYMINES) {
+          if (GET_STATUS(game->board[k]) != S_PRESSED) {
+            if (game->notes[k] == -2) {
               // can't click on flagged mines
               sfx_bump();
             } else {
@@ -1405,21 +1390,21 @@ start_game:
             }
           }
         } else {
-          if (GET_STATUS(game.board[k]) == 2) {
-            tile_info(game.board[k], TI_COLLECT);
+          if (GET_STATUS(game->board[k]) == S_PRESSED) {
+            tile_info(game->board[k], TI_COLLECT);
           } else {
-            place_number(game.selx, game.sely, 0, -3);
-            SET_STATUS(game.board[k], 2);
-            tile_info(game.board[k], TI_ATTACK);
+            place_number(game->selx, game->sely, 0, -3);
+            SET_STATUS(game->board[k], S_PRESSED);
+            tile_info(game->board[k], TI_ATTACK);
           }
           // refresh counts
           for (i32 dy = -1; dy <= 1; dy++) {
-            i32 by = dy + game.sely;
+            i32 by = dy + game->sely;
             if (by < 0 || by >= BOARD_H) continue;
             for (i32 dx = -1; dx <= 1; dx++) {
-              i32 bx = dx + game.selx;
+              i32 bx = dx + game->selx;
               if (bx < 0 || bx >= BOARD_W) continue;
-              if (game.board[bx + by * BOARD_W] == 0x80) { // empty and shown
+              if (game->board[bx + by * BOARD_W] == 0x80) { // empty and shown
                 place_threat(bx, by);
               }
             }
@@ -1435,7 +1420,7 @@ start_game:
         } else if (p == 0x100) {
           // save+quit
           palette_fadetowhite();
-          save_savedata(false);
+          save_savecopy(false);
           goto start_title;
         }
       }
@@ -1444,10 +1429,10 @@ start_game:
 }
 
 static i32 you_win() {
-  game.win = 2;
+  game->win = 2;
   cursor_hide();
   palette_fadetoblack();
-  if (game.difficulty & D_ONLYMINES) {
+  if (game->difficulty & D_ONLYMINES) {
     load_scr(scr_winmine_o);
   } else {
     // TODO: different end screens
@@ -1468,15 +1453,15 @@ static i32 you_win() {
 }
 
 static i32 you_died() {
-  game.win = 1;
+  game->win = 1;
   cursor_hide();
-  if (!(game.difficulty & D_ONLYMINES)) {
+  if (!(game->difficulty & D_ONLYMINES)) {
     // remove "level up" animation if it's there
-    place_expicons(game.exp, max_exp());
+    place_expicons(game->exp, max_exp());
   }
   for (i32 y = 0, k = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++, k++) {
-      if (GET_STATUS(game.board[k]) == 0) {
+      if (GET_STATUS(game->board[k]) == S_HIDDEN) {
         place_number(x, y, 0, -3);
         place_answer(x, y, 0);
       }
@@ -1489,19 +1474,19 @@ static i32 you_died() {
 
 static i32 blowup() {
   shake_screen();
-  place_answer(game.selx, game.sely, 1);
-  place_floor(game.selx, game.sely, 1);
+  place_answer(game->selx, game->sely, 1);
+  place_floor(game->selx, game->sely, 1);
   you_died();
   return 0;
 }
 
 static i32 collect_monster_item(i32 new_item) {
-  u32 k = game.selx + game.sely * BOARD_W;
-  i32 exp = tile_info(game.board[k], TI_THREAT);
+  u32 k = game->selx + game->sely * BOARD_W;
+  i32 exp = tile_info(game->board[k], TI_THREAT);
   award_exp(exp);
-  SET_TYPE(game.board[k], new_item);
-  place_answer(game.selx, game.sely, 0);
-  place_floor(game.selx, game.sely, new_item == T_EMPTY ? 2 : 1);
+  SET_TYPE(game->board[k], new_item);
+  place_answer(game->selx, game->sely, 0);
+  place_floor(game->selx, game->sely, new_item == T_EMPTY ? 2 : 1);
   return 0;
 }
 
@@ -1510,65 +1495,65 @@ static i32 collect_monster() {
 }
 
 static i32 attack_monster() {
-  u32 k = game.selx + game.sely * BOARD_W;
-  i32 exp = tile_info(game.board[k], TI_THREAT);
-  if (exp > game.hp) {
-    place_floor(game.selx, game.sely, 2);
-    place_answer(game.selx, game.sely, 0);
-    game.hp = 0;
+  u32 k = game->selx + game->sely * BOARD_W;
+  i32 exp = tile_info(game->board[k], TI_THREAT);
+  if (exp > game->hp) {
+    place_floor(game->selx, game->sely, 2);
+    place_answer(game->selx, game->sely, 0);
+    game->hp = 0;
     place_hp();
     you_died();
   } else {
-    place_floor(game.selx, game.sely, 1);
-    place_answer(game.selx, game.sely, 2);
-    game.hp -= exp;
+    place_floor(game->selx, game->sely, 1);
+    place_answer(game->selx, game->sely, 2);
+    game->hp -= exp;
     place_hp();
   }
   return 0;
 }
 
 static i32 collect_chest(u32 new_item) {
-  SET_TYPE(game.board[game.selx + game.sely * BOARD_W], new_item);
-  place_answer(game.selx, game.sely, 0);
-  place_floor(game.selx, game.sely, 1);
+  SET_TYPE(game->board[game->selx + game->sely * BOARD_W], new_item);
+  place_answer(game->selx, game->sely, 0);
+  place_floor(game->selx, game->sely, 1);
   return 0;
 }
 
 static i32 collect_item(u32 new_item) {
-  SET_TYPE(game.board[game.selx + game.sely * BOARD_W], new_item);
-  place_answer(game.selx, game.sely, 0);
-  place_floor(game.selx, game.sely, new_item == T_EMPTY ? 2 : 1);
+  SET_TYPE(game->board[game->selx + game->sely * BOARD_W], new_item);
+  place_answer(game->selx, game->sely, 0);
+  place_floor(game->selx, game->sely, new_item == T_EMPTY ? 2 : 1);
   return 0;
 }
 
 static i32 attack_chest() {
-  place_answer(game.selx, game.sely, 0);
+  place_answer(game->selx, game->sely, 0);
   return 0;
 }
 
 static i32 attack_item() {
-  place_floor(game.selx, game.sely, 2);
-  place_answer(game.selx, game.sely, 0);
+  place_floor(game->selx, game->sely, 2);
+  place_answer(game->selx, game->sely, 0);
   return 0;
 }
 
 static void reveal(i32 bx, i32 by) {
   if (bx < 0 || bx >= BOARD_W || by < 0 || by >= BOARD_H) return;
   i32 k = bx + by * BOARD_W;
-  if (GET_STATUS(game.board[k]) == 0) {
-    if (GET_TYPE(game.board[k]) == T_EMPTY) {
-      SET_STATUS(game.board[k], 2);
+  if (GET_STATUS(game->board[k]) == S_HIDDEN) {
+    if (GET_TYPE(game->board[k]) == T_EMPTY) {
+      SET_STATUS(game->board[k], S_PRESSED);
       place_floor(bx, by, 2);
       place_threat(bx, by);
     } else if (
-      IS_ITEM(game.board[k]) ||
-      IS_CHEST(game.board[k])
+      IS_ITEM(game->board[k]) ||
+      IS_CHEST(game->board[k])
     ) {
-      SET_STATUS(game.board[k], 2);
+      SET_STATUS(game->board[k], S_PRESSED);
       place_answer(bx, by, 0);
       place_floor(bx, by, 1);
     } else {
-      SET_STATUS(game.board[k], 1);
+      SET_STATUS(game->board[k], S_VISIBLE);
       place_floor(bx, by, 0);
       place_answer(bx, by, 0);
       place_number(bx, by, 0, -3);
@@ -1586,7 +1571,7 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
         case TI_THREAT: return 0;
         case TI_COLLECT: return 0;
         case TI_ATTACK:
-          place_floor(game.selx, game.sely, 2);
+          place_floor(game->selx, game->sely, 2);
           return 0;
       }
       break;
@@ -1726,17 +1711,17 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
         case TI_ICON: return TILE(64, 32);
         case TI_THREAT: return 0;
         case TI_COLLECT: {
-          if (game.hp <= 0) {
+          if (game->hp <= 0) {
             sfx_bump();
             return 0;
           }
-          i32 item = game.hp >= 5 ? T_ITEM_EXP5 : game.hp >= 3 ? T_ITEM_EXP3 : T_ITEM_EXP1;
-          game.hp = 0;
+          i32 item = game->hp >= 5 ? T_ITEM_EXP5 : game->hp >= 3 ? T_ITEM_EXP3 : T_ITEM_EXP1;
+          game->hp = 0;
           place_hp();
           return collect_item(item);
         }
         case TI_ATTACK:
-          place_answer(game.selx, game.sely, 0);
+          place_answer(game->selx, game->sely, 0);
           return 0;
       }
       break;
@@ -1769,7 +1754,7 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
         case TI_ICON: return TILE(0, 112);
         case TI_THREAT: return 0;
         case TI_COLLECT:
-          game.hp = max_hp();
+          game->hp = max_hp();
           place_hp();
           return collect_item(T_EMPTY);
         case TI_ATTACK: return attack_item();
@@ -1783,7 +1768,7 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
           for (i32 dy = -2; dy <= 2; dy++) {
             i32 w = dy == 0 ? 2 : dy == 1 || dy == -1 ? 1 : 0;
             for (i32 dx = -w; dx <= w; dx++) {
-              reveal(dx + game.selx, dy + game.sely);
+              reveal(dx + game->selx, dy + game->sely);
             }
           }
           return collect_item(T_EMPTY);
@@ -1809,9 +1794,8 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
               for (i32 dy = 0; dy < 3; dy++) {
                 for (i32 dx = 0; dx < 3; dx++) {
                   i32 k = (x + dx) + (y + dy) * BOARD_W;
-                  u8 t = game.board[k];
-                  if (GET_STATUS(t) == 0) {
-                    // unrevealed
+                  u8 t = game->board[k];
+                  if (GET_STATUS(t) == S_HIDDEN) {
                     if (threat_at(x + dx, y + dy) < 8) score++;
                     score += 3;
                     switch (GET_TYPE(t)) {
@@ -1841,7 +1825,7 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
                   same_score = 0;
                 } else if (score == best_score) {
                   same_score++;
-                  if (random_pick(same_score, game.seed + x + y * BOARD_W)) {
+                  if (rnd_pick(&game->rnd, same_score)) {
                     best_x = x;
                     best_y = y;
                   }
@@ -1867,7 +1851,7 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
         case TI_COLLECT:
           for (i32 y = 0, k = 0; y < BOARD_H; y++) {
             for (i32 x = 0; x < BOARD_W; x++, k++) {
-              if (GET_TYPE(game.board[k]) == T_LV1A) {
+              if (GET_TYPE(game->board[k]) == T_LV1A) {
                 reveal(x, y);
               }
             }
@@ -1883,7 +1867,7 @@ static i32 tile_info(u32 type, enum tile_info_action action) {
         case TI_COLLECT:
         for (i32 y = 0, k = 0; y < BOARD_H; y++) {
           for (i32 x = 0; x < BOARD_W; x++, k++) {
-            i32 t = GET_TYPE(game.board[k]);
+            i32 t = GET_TYPE(game->board[k]);
             if (t == T_LV5C || t == T_LV8) {
               reveal(x, y);
             }

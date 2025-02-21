@@ -5,15 +5,10 @@
 // SPDX-License-Identifier: 0BSD
 //
 
-#include "util.h"
-
-const u8 ctz32_bitpos[32] SECTION_ROM = {
-  0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8, 31, 27, 13, 23, 21, 19, 16, 7, 26, 12,
-  18, 6, 11, 5, 10, 9
-};
+#include "rnd.h"
 
 // inverse_lut[i] = 65536 / (i + 1)
-const u16 inverse16_lut[256] SECTION_ROM = {
+static const u16 inverse16_lut[256] = {
   0xffff, 0x8000, 0x5555, 0x4000, 0x3333, 0x2aab, 0x2492, 0x2000, 0x1c72, 0x199a, 0x1746, 0x1555,
   0x13b1, 0x1249, 0x1111, 0x1000, 0x0f0f, 0x0e39, 0x0d79, 0x0ccd, 0x0c31, 0x0ba3, 0x0b21, 0x0aab,
   0x0a3d, 0x09d9, 0x097b, 0x0925, 0x08d4, 0x0889, 0x0842, 0x0800, 0x07c2, 0x0788, 0x0750, 0x071c,
@@ -38,15 +33,41 @@ const u16 inverse16_lut[256] SECTION_ROM = {
   0x0103, 0x0102, 0x0101, 0x0100
 };
 
-static inline u32 whisky2(u32 i0, u32 i1){
-  u32 z0 = (i1 * 1833778363) ^ i0;
-  u32 z1 = (z0 *  337170863) ^ (z0 >> 13) ^ z0;
-  u32 z2 = (z1 *  620363059) ^ (z1 >> 10);
-  u32 z3 = (z2 *  232140641) ^ (z2 >> 21);
-  return z3;
+bool rnd_pick(struct rnd_st *ctx, u32 index) {
+  if (index == 0) return true;
+  return (rnd32(ctx) & 0xffff) < inverse16_lut[index > 0xff ? 0xff : index];
 }
 
-bool random_pick(u32 index, u32 seed) {
-  if (index == 0) return true;
-  return (whisky2(seed, index) & 0xffff) < inverse16_lut[index > 0xff ? 0xff : index];
+u32 roll(struct rnd_st *ctx, u32 sides) {
+  switch (sides) {
+    case 0: return 0;
+    case 1: return 0;
+    case 2: return rnd32(ctx) & 1;
+    case 3: {
+      u32 r = rnd32(ctx) & 3;
+      while (r == 3) r = rnd32(ctx) & 3;
+      return r;
+    }
+    case 4: return rnd32(ctx) & 3;
+  }
+  u32 mask = sides - 1;
+  mask |= mask >> 1;
+  mask |= mask >> 2;
+  mask |= mask >> 4;
+  mask |= mask >> 8;
+  mask |= mask >> 16;
+  u32 r = rnd32(ctx) & mask;
+  while (r >= sides) {
+    r = rnd32(ctx) & mask;
+  }
+  return r;
+}
+
+void shuffle8(struct rnd_st *ctx, u8 *arr, u32 length) {
+  for (u32 i = length - 1; i > 0; i--) {
+    u32 r = roll(ctx, i + 1);
+    u32 temp = arr[i];
+    arr[i] = arr[r];
+    arr[r] = temp;
+  }
 }

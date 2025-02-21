@@ -17,6 +17,7 @@
 #include "stb_ds.h"
 #include "snd.h"
 #include "../src/game.h"
+#include "generate.h"
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -53,6 +54,8 @@ static void print_usage() {
     "\n"
     "  levels <count> <seed> <output.bin>\n"
     "    Generate starter levels\n"
+    "\n"
+    "  generate\n"
   );
 }
 
@@ -434,6 +437,10 @@ int main(int argc, const char **argv) {
       return 1;
     }
     return levels(atoi(argv[2]), atoi(argv[3]), argv[4]);
+  } else if (strcmp(argv[1], "generate") == 0) {
+    u8 out[128 * 6];
+    generate(0x1234, out);
+    return 0;
   } else if (strcmp(argv[1], "snd") == 0) {
     return snd_main(argc - 2, &argv[2]);
   } else {

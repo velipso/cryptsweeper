@@ -11,6 +11,7 @@
 
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 #include "rnd.h"
 
 typedef uint8_t  u8;
@@ -46,14 +47,6 @@ struct game_st {
   // and TT is type (0-63)
 };
 
-struct levelgen_st {
-  struct rnd_st rnd;
-  u32 unfixed_size;
-  u8 board_order[BOARD_SIZE];
-  u8 board[BOARD_SIZE];
-  u8 unfixed[BOARD_SIZE];
-};
-
 // difficulty flags
 #define D_DIFFICULTY   0x0f
 #define D_ONLYMINES    0x10
@@ -69,30 +62,27 @@ struct levelgen_st {
 #define T_LV5B        7
 #define T_LV5C        8
 #define T_LV6         9
-#define T_LV7A        10
-#define T_LV7B        11
-#define T_LV7C        12
-#define T_LV7D        13
-#define T_LV8         14
-#define T_LV9         15
-#define T_LV10        16
-#define T_LV11        17
-#define T_LV13        18
-#define T_MINE        19
-#define T_WALL        20
-#define T_CHEST_HEAL  21
-#define T_CHEST_EYE2  22
-#define T_CHEST_EXP   23
+#define T_LV7         10
+#define T_LV8         11
+#define T_LV9         12
+#define T_LV10        13
+#define T_LV11        14
+#define T_LV13        15
+#define T_MINE        16
+#define T_WALL        17
+#define T_CHEST_HEAL  18
+#define T_CHEST_EYE2  19
+#define T_CHEST_EXP   20
 // items:
-#define T_ITEM_HEAL   24
-#define T_ITEM_EYE    25
-#define T_ITEM_EYE2   26
-#define T_ITEM_SHOW1  27
-#define T_ITEM_SHOW5  28
-#define T_ITEM_EXP1   29
-#define T_ITEM_EXP3   30
-#define T_ITEM_EXP5   31
-#define T_ITEM_EXIT   32
+#define T_ITEM_HEAL   21
+#define T_ITEM_EYE    22
+#define T_ITEM_EYE2   23
+#define T_ITEM_SHOW1  24
+#define T_ITEM_SHOW5  25
+#define T_ITEM_EXP1   26
+#define T_ITEM_EXP3   27
+#define T_ITEM_EXP5   28
+#define T_ITEM_EXIT   29
 // max of 63
 
 // tile status
@@ -101,12 +91,18 @@ struct levelgen_st {
 #define S_PRESSED     2
 #define S_KILLED      3
 
-#define GET_TYPE(b)        ((b) & 0x3f)
-#define SET_TYPE(b, s)     b = ((b) & 0xc0) | (s)
-#define GET_STATUS(b)      (((b) >> 6) & 3)
-#define SET_STATUS(b, s)   b = GET_TYPE(b) | ((s) << 6)
-#define IS_CHEST(b)        (GET_TYPE(b) >= T_CHEST_HEAL && GET_TYPE(b) <= T_CHEST_EXP)
-#define IS_ITEM(b)         (GET_TYPE(b) >= T_ITEM_HEAL && GET_TYPE(b) <= T_ITEM_EXIT)
+#define GET_TYPE(b)               ((b) & 0x3f)
+#define GET_TYPEXY(b, x, y)       GET_TYPE((b)[(x) + (y) * BOARD_W])
+#define SET_TYPE(b, t)            b = ((b) & 0xc0) | (t)
+#define SET_TYPEXY(b, x, y, t)    do { i32 k = (x) + (y) * BOARD_W; SET_TYPE(b[k], t); } while (0)
+#define GET_STATUS(b)             (((b) >> 6) & 3)
+#define GET_STATUSXY(b, x, y)     GET_STATUS((b)[(x) + (y) * BOARD_W])
+#define SET_STATUS(b, s)          b = GET_TYPE(b) | ((s) << 6)
+#define SET_STATUSXY(b, x, y, s)  do { i32 k = (x) + (y) * BOARD_W; SET_STATUS(b[k], s); } while (0)
+#define IS_CHEST(b)               (GET_TYPE(b) >= T_CHEST_HEAL && GET_TYPE(b) <= T_CHEST_EXP)
+#define IS_CHESTXY(b, x, y)       IS_CHEST((b)[(x) + (y) * BOARD_W])
+#define IS_ITEM(b)                (GET_TYPE(b) >= T_ITEM_HEAL && GET_TYPE(b) <= T_ITEM_EXIT)
+#define IS_ITEMXY(b, x, y)        IS_ITEM((b)[(x) + (y) * BOARD_W])
 
 enum game_event {
   EV_TILE_UPDATE, // (x, y) tile location
@@ -119,15 +115,7 @@ enum game_event {
 
 typedef void (*game_handler_f)(struct game_st *game, enum game_event ev, i32 x, i32 y);
 
-static inline void levelgen_seed(struct levelgen_st *ctx, u32 seed) {
-  rnd_seed(&ctx->rnd, seed);
-}
-
-void levelgen_stage1(struct levelgen_st *ctx);
-void levelgen_stage2(struct levelgen_st *ctx);
-void levelgen_onlymines(struct levelgen_st *ctx, u32 difficulty);
-
-void game_new(struct game_st *game, struct levelgen_st *ctx);
+void game_new(struct game_st *game, i32 difficulty, u32 seed);
 void game_hover(struct game_st *game, game_handler_f handler, i32 x, i32 y);
 bool game_click(struct game_st *game, game_handler_f handler);
 bool game_levelup(struct game_st *game, game_handler_f handler);

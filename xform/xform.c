@@ -54,8 +54,6 @@ static void print_usage() {
     "\n"
     "  levels <count> <seed> <output.bin>\n"
     "    Generate starter levels\n"
-    "\n"
-    "  generate\n"
   );
 }
 
@@ -342,21 +340,27 @@ static int levels(int count, int seed, const char *output) {
     fprintf(stderr, "\nFailed to write: %s\n", output);
     return 1;
   }
-  u8 *levels = calloc(count, 128);
-  struct levelgen_st ctx;
-  for (int i = 0; i < count; i++, seed++) {
-    if ((i % 50) == 49 || i == count - 1) {
-      printf("generating level %d/%d\n", i + 1, count);
+  struct rnd_st rnd;
+  rnd_seed(&rnd, seed);
+  for (i32 group = 0; group < count; group++) {
+    if ((group % 100) == 99 || group == count - 1) {
+      printf("generating levels %d/%d\n", group + 1, count);
     }
-    levelgen_seed(&ctx, seed);
-    levelgen_stage1(&ctx);
-    for (int j = 0; j < BOARD_SIZE; j++) {
-      levels[i * 128 + j] = ctx.board[j];
+    u8 levels[128 * 6] = {0};
+    for (int i = 0; i < 5; i++) {
+      generate_normal(&levels[128 * i], i, &rnd);
     }
+    for (int i = 0; i < 5; i++) {
+      u8 board[BOARD_SIZE];
+      generate_onlymines(board, i, &rnd);
+      // embed mine games as bits on the 6th board for each difficulty
+      for (int j = 0; j < BOARD_SIZE; j++) {
+        levels[128 * 5 + j] |= board[j] ? (1 << i) : 0;
+      }
+    }
+    fwrite(levels, 128, 6, fp);
   }
-  fwrite(levels, 128, count, fp);
   fclose4(fp);
-  free(levels);
   return 0;
 }
 
@@ -437,10 +441,6 @@ int main(int argc, const char **argv) {
       return 1;
     }
     return levels(atoi(argv[2]), atoi(argv[3]), argv[4]);
-  } else if (strcmp(argv[1], "generate") == 0) {
-    u8 out[128 * 6];
-    generate(0x1234, out);
-    return 0;
   } else if (strcmp(argv[1], "snd") == 0) {
     return snd_main(argc - 2, &argv[2]);
   } else {

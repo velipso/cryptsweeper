@@ -6,10 +6,7 @@
 //
 
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <math.h>
+#include "../src/game.h"
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -18,4 +15,5 @@ typedef int8_t   i8;
 typedef int16_t  i16;
 typedef int32_t  i32;
 
-void generate(u32 seed, u8 *out);
+void generate_onlymines(u8 *board, i32 diff, struct rnd_st *rnd);
+void generate_normal(u8 *board, i32 diff, struct rnd_st *rnd);

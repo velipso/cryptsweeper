@@ -228,7 +228,28 @@ static void place_threat(i32 x, i32 y) {
     place_number(x, y, 0, threat == 0 ? -3 : threat);
   } else {
     place_minehint(x, y, threat >> 8);
-    if (threat & 0xff) {
+
+    // check if we're in range of a lv5c
+    bool hidden = false;
+    i32 w = 0;
+    for (i32 dy = -2; dy <= 2 && !hidden; dy++) {
+      i32 by = dy + y;
+      if (by < 0 || by >= BOARD_H) goto next_dy;
+      for (i32 dx = -w; dx <= w && !hidden; dx++) {
+        i32 bx = dx + x;
+        if (bx < 0 || bx >= BOARD_W) continue;
+        if (GET_TYPEXY(game->board, bx, by) == T_LV5C) {
+          hidden = true;
+        }
+      }
+next_dy:
+      if (dy < 0) w++;
+      else w--;
+    }
+
+    if (hidden) {
+      place_number(x, y, 0, -1);
+    } else if (threat & 0xff) {
       place_number(x, y, 0, threat & 0xff);
     } else {
       place_number(x, y, 0, -3);
@@ -435,47 +456,85 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
   0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 };
 
-static void load_level(u32 diff, u32 seed) {
-  // reset character
-  game->level = 0;
-  game->hp = 0;
-  game->exp = 0;
-  game->difficulty = diff;
-  game->win = 0;
-  game->hp = max_hp(game);
+static void load_level(i32 diff, u32 seed) {
+  game_new(game, diff, seed);
 
-  struct levelgen_st *ctx = malloc(sizeof(struct levelgen_st));
-  levelgen_seed(ctx, seed);
-
-  if (diff & D_ONLYMINES) {
-    levelgen_onlymines(ctx, diff & D_DIFFICULTY);
-  } else {
-    // generate level
-    const u8 *levels = BINADDR(levels_bin);
-    u32 base = whisky2(seed, 999) & ((BINSIZE(levels_bin) >> 7) - 1);
-    levels += base * 128;
-    for (i32 i = 0; i < BOARD_SIZE; i++) {
-      ctx->board[i] = levels[i];
-    }
-    levelgen_stage2(ctx);
-  }
+  struct rnd_st rnd;
+  rnd_seed(&rnd, seed);
+  const u8 *levels = BINADDR(levels_bin);
+  u32 base = rnd32(&rnd) & 1023; // TODO: mask by number of level groups
+  levels += base * 128 * 6;
 
   game->selx = BOARD_CW;
   game->sely = BOARD_CH;
-  for (i32 y = 0; y < BOARD_H; y++) {
-    for (i32 x = 0; x < BOARD_W; x++) {
-      i32 i = x + y * BOARD_W;
+  if (diff & D_ONLYMINES) {
+    // copy onlymines level based on difficulty
+    levels += 128 * 5;
+    diff &= ~D_ONLYMINES;
+    for (i32 i = 0; i < BOARD_SIZE; i++) {
       game->notes[i] = -3;
-      game->board[i] = ctx->board[i];
-      if (GET_TYPE(game->board[i]) == T_LV13) {
-        SET_STATUS(game->board[i], S_VISIBLE);
-      } else if (GET_TYPE(game->board[i]) == T_ITEM_EYE) {
-        game->selx = x;
-        game->sely = y;
+      game->board[i] = (levels[i] & (1 << diff)) ? T_MINE : T_EMPTY;
+    }
+    // find the best location for the start by looking for the most empty cells
+    i32 best_score = -1;
+    i32 same_score = 0;
+    for (i32 y = 0, i = 0; y < BOARD_H; y++) {
+      for (i32 x = 0; x < BOARD_W; x++, i++) {
+        if (game->board[i] == T_EMPTY) {
+          i32 score = 0;
+          for (i32 dy = -1; dy <= 1; dy++) {
+            i32 by = dy + y;
+            if (by < 0 || by >= BOARD_H) continue;
+            for (i32 dx = -1; dx <= 1; dx++) {
+              i32 bx = dx + x;
+              if (bx < 0 || bx >= BOARD_W) continue;
+              score += game->board[bx + by * BOARD_W] == T_EMPTY ? 1 : 0;
+            }
+          }
+          if (score > best_score) {
+            best_score = score;
+            same_score = 1;
+            game->selx = x;
+            game->sely = y;
+          } else if (score == best_score && rnd_pick(&rnd, same_score)) {
+            same_score++;
+            game->selx = x;
+            game->sely = y;
+          }
+        }
       }
     }
+  } else {
+    // copy normal level based on difficulty
+    levels += 128 * diff;
+    for (i32 y = 0, i = 0; y < BOARD_H; y++) {
+      for (i32 x = 0; x < BOARD_W; x++, i++) {
+        game->notes[i] = -3;
+        game->board[i] = levels[i];
+        // start at the T_ITEM_EYE
+        if (GET_TYPE(game->board[i]) == T_ITEM_EYE) {
+          game->selx = x;
+          game->sely = y;
+        }
+      }
+    }
+    // swap some lv1a/lv2/lv3 around for fun
+    for (i32 swap = 0; swap < 200; swap++) {
+      i32 ai = 0, ap = 0;
+      i32 bi = 0, bp = 0;
+      for (i32 i = 0; i < BOARD_SIZE; i++) {
+        i32 t = GET_TYPE(game->board[i]);
+        if (t == T_LV1A && rnd_pick(&rnd, ap++)) {
+          ai = i;
+        } else if ((t == T_LV2 || t == T_LV3) && rnd_pick(&rnd, bp++)) {
+          bi = i;
+        }
+      }
+      i32 temp = game->board[ai];
+      game->board[ai] = game->board[bi];
+      game->board[bi] = temp;
+    }
   }
-  free(ctx);
 }
 
 static void load_scr_raw(const void *addr, u32 size) {

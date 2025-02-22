@@ -7,6 +7,7 @@
 
 #include "gba.h"
 #include "reg.h"
+#include <stdarg.h>
 
 extern void sys__irq_init();
 extern void (*sys__irq_vblank)();
@@ -202,3 +203,68 @@ place_in_slot:
   g_snd.sfx[slot].priority = priority;
   return true;
 }
+
+#ifdef SYS_PRINT
+void sys_print(const char *fmt, ...) {
+  if (!sys_mGBA()) {
+    return;
+  }
+  va_list args;
+  va_start(args, fmt);
+  i32 len = 0;
+  volatile u8 *here = &REG_DEBUG_STRING;
+
+  #define putchar(c)  do {  \
+      *here = c;            \
+      here++;               \
+      len++;                \
+    } while (0)
+
+  for (const char *p = fmt; *p != '\0' && len < 250; p++) {
+    char ch = *p;
+    if (ch == '%') {
+      p++;
+      ch = *p;
+      switch (ch) {
+        case '%':
+          putchar('%');
+          break;
+        case 'x': {
+          u32 val = va_arg(args, u32);
+          const char *hex = "0123456789abcdef";
+          if (len < 244) {
+            putchar('0');
+            putchar('x');
+            if (val < 256) {
+              for (i32 i = 4; i >= 0; i -= 4) {
+                putchar(hex[(val >> i) & 0xf]);
+              }
+            } else if (val < 65536) {
+              for (i32 i = 12; i >= 0; i -= 4) {
+                putchar(hex[(val >> i) & 0xf]);
+              }
+            } else {
+              for (i32 i = 28; i >= 0; i -= 4) {
+                putchar(hex[(val >> i) & 0xf]);
+              }
+            }
+          }
+          break;
+        }
+        default:
+          putchar('%');
+          putchar(ch);
+          break;
+      }
+    } else {
+      putchar(ch);
+    }
+  }
+  va_end(args);
+
+  #undef putchar
+
+  *here = 0;
+  REG_DEBUG_FLAGS = 1 | 0x100;
+}
+#endif // SYS_PRINT

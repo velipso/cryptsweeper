@@ -186,14 +186,38 @@ static i32 threat_at(const u8 *board, i32 x, i32 y) {
 }
 
 i32 count_threat(const u8 *board, i32 x, i32 y) {
-  i32 result = -threat_at(board, x, y);
+  i32 result = 0;
   for (i32 dy = -1; dy <= 1; dy++) {
     i32 by = dy + y;
     for (i32 dx = -1; dx <= 1; dx++) {
+      if (dy == 0 && dx == 0) continue;
       i32 bx = dx + x;
       result += threat_at(board, bx, by);
     }
   }
+
+  // check if we're in range of a lv5c
+  bool hidden = false;
+  i32 w = 0;
+  for (i32 dy = -2; dy <= 2 && !hidden; dy++) {
+    i32 by = dy + y;
+    if (by < 0 || by >= BOARD_H) goto next_dy;
+    for (i32 dx = -w; dx <= w && !hidden; dx++) {
+      i32 bx = dx + x;
+      if (bx < 0 || bx >= BOARD_W) continue;
+      if (GET_TYPEXY(board, bx, by) == T_LV5C) {
+        hidden = true;
+      }
+    }
+next_dy:
+    if (dy < 0) w++;
+    else w--;
+  }
+  if (hidden) {
+    // mask threat
+    result |= 0xff;
+  }
+
   return result;
 }
 
@@ -258,6 +282,7 @@ static void reveal(struct game_st *game, game_handler_f handler, i32 x, i32 y) {
   if (GET_STATUS(game->board[k]) == S_HIDDEN) {
     if (
       GET_TYPE(game->board[k]) == T_EMPTY ||
+      GET_TYPE(game->board[k]) == T_WALL ||
       IS_ITEM(game->board[k]) ||
       IS_CHEST(game->board[k])
     ) {
@@ -327,17 +352,17 @@ static i32 tile_info(
       break;
     case T_LV5A:
       switch (action) {
-        case TI_ICON: return TILE(160, 80);
+        case TI_ICON: return TILE(160, 96);
         case TI_THREAT: return 5;
-        case TI_COLLECT: return collect_monster_item(game, handler, T_ITEM_SHOW1);
+        case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
       }
       break;
     case T_LV5B:
       switch (action) {
-        case TI_ICON: return TILE(160, 96);
+        case TI_ICON: return TILE(160, 80);
         case TI_THREAT: return 5;
-        case TI_COLLECT: return collect_monster(game, handler);
+        case TI_COLLECT: return collect_monster_item(game, handler, T_ITEM_SHOW1);
         case TI_ATTACK: return attack_monster(game, handler);
       }
       break;
@@ -415,14 +440,26 @@ static i32 tile_info(
       break;
     case T_WALL:
       switch (action) {
-        case TI_ICON: return TILE(64, 32);
+        case TI_ICON: return TILE(128, 112);
         case TI_THREAT: return 0;
         case TI_COLLECT: {
           if (game->hp <= 0) {
             return -1;
           }
-          i32 item = game->hp >= 5 ? T_ITEM_EXP5 : game->hp >= 3 ? T_ITEM_EXP3 : T_ITEM_EXP1;
-          game->hp = 0;
+          // spend extra health for exp
+          i32 item = T_EMPTY;
+          if (game->hp >= 6) {
+            game->hp -= 6;
+            item = T_ITEM_EXP5;
+          } else if (game->hp >= 4) {
+            game->hp -= 4;
+            item = T_ITEM_EXP3;
+          } else if (game->hp >= 2) {
+            game->hp -= 2;
+            item = T_ITEM_EXP1;
+          } else {
+            game->hp = 0;
+          }
           handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
           return replace_type(game, handler, item);
         }
@@ -574,7 +611,7 @@ static i32 tile_info(
         for (i32 y = 0, k = 0; y < BOARD_H; y++) {
           for (i32 x = 0; x < BOARD_W; x++, k++) {
             i32 t = GET_TYPE(game->board[k]);
-            if (t == T_LV5B || t == T_LV8) {
+            if (t == T_LV5A || t == T_LV8) {
               reveal(game, handler, x, y);
             }
           }
@@ -627,4 +664,237 @@ static i32 tile_info(
   }
   #undef TILE
   return -1;
+}
+
+static i32 known_threat_at(struct game_st *game, i32 x, i32 y) {
+  i32 k = x + y * BOARD_W;
+  i32 s = GET_STATUS(game->board[k]);
+  if (s == S_HIDDEN) {
+    if (game->notes[k] == -2) { // noted mine
+      return 0x100;
+    } else if (game->notes[k] > 0) { // noted threat
+      return game->notes[k];
+    }
+    return -1; // unknown
+  }
+  // visible or pressed, so query type directly
+  return threat_at(game->board, x, y);
+}
+
+static i32 remaining_count_threat(struct game_st *game, i32 x, i32 y) {
+  i32 ct = count_threat(game->board, x, y);
+  for (i32 dy = -1; dy <= 1; dy++) {
+    i32 by = y + dy;
+    if (by < 0 || by >= BOARD_H) continue;
+    for (i32 dx = -1; dx <= 1; dx++) {
+      if (dy == 0 && dx == 0) continue;
+      i32 bx = x + dx;
+      if (bx < 0 || bx >= BOARD_W) continue;
+      i32 kt = known_threat_at(game, bx, by);
+      if (kt >= 0x100) {
+        ct -= 0x100;
+      } else if (kt > 0 && kt < 0xff) {
+        if ((ct & 0xff) != 0xff) {
+          ct -= kt;
+        }
+      }
+    }
+  }
+  return ct;
+}
+
+static bool tile_could_threat(struct game_st *game, i32 x, i32 y, i32 threat) {
+  // hypothesis: the tile at (x,y) has threat `threat`
+  for (i32 dy = -1; dy <= 1; dy++) {
+    i32 by = y + dy;
+    if (by < 0 || by >= BOARD_H) continue;
+    for (i32 dx = -1; dx <= 1; dx++) {
+      if (dy == 0 && dx == 0) continue;
+      i32 bx = x + dx;
+      if (bx < 0 || bx >= BOARD_W) continue;
+      i32 bk = bx + by * BOARD_W;
+      i32 s = GET_STATUS(game->board[bk]);
+      i32 t = GET_TYPE(game->board[bk]);
+      if (s == S_PRESSED && t == T_EMPTY) {
+        i32 ct = remaining_count_threat(game, bx, by);
+        if (threat > ct) {
+          // an adjacent cell is telling us that the real threat can't exceed ct
+          // so we've proven our hypothesis false
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+u32 game_hint(struct game_st *game, game_handler_f handler) {
+  #define H_CLICK(x, y)    (0x00000000 | (x) | ((y) << 8))
+  #define H_NOTE(x, y, n)  (0x00010000 | (x) | ((y) << 8) | (((u8)n) << 24))
+  #define H_LEVELUP()      0x00020000
+  #define H_GIVEUP()       0x00030000
+
+  if (game->hp == 0 && game->exp >= max_exp(game)) {
+    // level up aggressively to restore health asap
+    return H_LEVELUP();
+  }
+  i32 heal_x = -1, heal_y = -1;
+  for (i32 y = 0, k = 0; y < BOARD_H; y++) {
+    for (i32 x = 0; x < BOARD_W; x++, k++) {
+      i32 s = GET_STATUS(game->board[k]);
+      i32 t = GET_TYPE(game->board[k]);
+      if ((s == S_VISIBLE || s == S_PRESSED) && t == T_ITEM_HEAL) {
+        heal_x = x;
+        heal_y = y;
+      }
+      if (
+        // always collect items (except healing), exp, and chests ASAP
+        ((s == S_VISIBLE || s == S_PRESSED) && (
+          t == T_ITEM_EYE ||
+          t == T_ITEM_EYE2 ||
+          t == T_ITEM_EXP1 ||
+          t == T_ITEM_EXP3 ||
+          t == T_ITEM_EXP5 ||
+          t == T_ITEM_SHOW1 ||
+          t == T_ITEM_SHOW5 ||
+          t == T_ITEM_EXIT ||
+          IS_CHEST(t)
+        )) ||
+        (s == S_PRESSED && IS_MONSTER(t))
+      ) {
+        return H_CLICK(x, y);
+      } else if (s == S_PRESSED && t == T_EMPTY) {
+        // attempt to note adjacent cells based on this threat
+        i32 threat = remaining_count_threat(game, x, y);
+        i32 ux = -1, uy = -1, uc = 0;
+        for (i32 dy = -1; dy <= 1; dy++) {
+          i32 by = y + dy;
+          if (by < 0 || by >= BOARD_H) continue;
+          for (i32 dx = -1; dx <= 1; dx++) {
+            if (dy == 0 && dx == 0) continue;
+            i32 bx = x + dx;
+            if (bx < 0 || bx >= BOARD_W) continue;
+            if (known_threat_at(game, bx, by) < 0) {
+              // unknown
+              uc++;
+              ux = bx;
+              uy = by;
+            }
+          }
+        }
+        if (uc > 0) {
+          if (threat == 0) {
+            // no threat here, so click all cells around it
+            return H_CLICK(ux, uy);
+          }
+          if (uc == 1) {
+            // a single unknown, and we know the threat, so note it
+            if (threat > 0 && threat < 0xff) {
+              return H_NOTE(ux, uy, threat);
+            } else if (threat == 0x100 || threat == 0x1ff) {
+              return H_NOTE(ux, uy, -2); // mine
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // find a useful cell to challenge
+  i32 best_score = 0;
+  i32 same_score = 0;
+  i32 best_x = -1;
+  i32 best_y = -1;
+  for (i32 y = 0, k = 0; y < BOARD_H; y++) {
+    for (i32 x = 0; x < BOARD_W; x++, k++) {
+      i32 score = 0;
+
+      // get the threat (or worst case scenario)
+      i32 threat = known_threat_at(game, x, y);
+      if (threat < 0) { // unknown threat, calculate worst case
+        score += 100; // favor cells that have unknown threats
+        threat = 0x100;
+        if (!tile_could_threat(game, x, y, 0x100)) {
+          for (i32 ct = 11; ct >= 1; ct--) {
+            if (tile_could_threat(game, x, y, ct)) {
+              threat = ct;
+              break;
+            }
+          }
+        }
+      }
+
+      if (threat == 0) {
+        if (GET_STATUS(game->board[k]) == S_HIDDEN) {
+          // click hidden non-threats immediately
+          return H_CLICK(x, y);
+        }
+      } else if (threat <= game->hp) {
+        // we *could* kill this monster... should we?
+        // see how many cells we would get information about
+        i32 hidden = 0;
+        for (i32 dy = -1; dy <= 1; dy++) {
+          i32 by = dy + y;
+          if (by < 0 || by >= BOARD_H) continue;
+          for (i32 dx = -1; dx <= 1; dx++) {
+            i32 bx = dx + x;
+            if (bx < 0 || bx >= BOARD_W) continue;
+            if (GET_STATUSXY(game->board, bx, by) == S_HIDDEN) {
+              hidden++;
+            }
+          }
+        }
+        score += threat * 3; // favor higher level monsters
+        score += hidden * 4; // favor cells next to unknowns
+      } else {
+        // this cell would kill us!
+        continue;
+      }
+      if (score <= 0) continue;
+      if (score > best_score) {
+        best_score = score;
+        same_score = 0;
+        best_x = x;
+        best_y = y;
+      } else if (score == best_score) {
+        same_score++;
+        if (rnd_pick(&game->rnd, same_score)) {
+          best_x = x;
+          best_y = y;
+        }
+      }
+    }
+  }
+  if (best_x >= 0) {
+    return H_CLICK(best_x, best_y);
+  }
+
+  // not enough HP to make progress, so try and kill a wall
+  if (game->hp > 0) {
+    for (i32 y = 0, i = 0; y < BOARD_H; y++) {
+      for (i32 x = 0; x < BOARD_W; x++, i++) {
+        if (
+          GET_STATUS(game->board[i]) != S_HIDDEN &&
+          GET_TYPE(game->board[i]) == T_WALL
+        ) {
+          return H_CLICK(x, y);
+        }
+      }
+    }
+  }
+
+  // no other action, so heal if possible
+  if (game->exp >= max_exp(game)) {
+    return H_LEVELUP();
+  } else if (heal_x >= 0) {
+    return H_CLICK(heal_x, heal_y);
+  }
+
+  // oh boy, I guess we're screwed
+
+  return H_GIVEUP();
+  #undef H_CLICK
+  #undef H_NOTE
+  #undef H_LEVELUP
+  #undef H_GIVEUP
 }

@@ -34,6 +34,7 @@ static i32 g_cursor_x;
 static i32 g_cursor_y;
 static i32 g_statsel_x;
 static i32 g_statsel_y;
+static bool g_peek = false;
 
 struct save_st {
   u32 checksum;
@@ -228,28 +229,9 @@ static void place_threat(i32 x, i32 y) {
     place_number(x, y, 0, threat == 0 ? -3 : threat);
   } else {
     place_minehint(x, y, threat >> 8);
-
-    // check if we're in range of a lv5c
-    bool hidden = false;
-    i32 w = 0;
-    for (i32 dy = -2; dy <= 2 && !hidden; dy++) {
-      i32 by = dy + y;
-      if (by < 0 || by >= BOARD_H) goto next_dy;
-      for (i32 dx = -w; dx <= w && !hidden; dx++) {
-        i32 bx = dx + x;
-        if (bx < 0 || bx >= BOARD_W) continue;
-        if (GET_TYPEXY(game->board, bx, by) == T_LV5C) {
-          hidden = true;
-        }
-      }
-next_dy:
-      if (dy < 0) w++;
-      else w--;
-    }
-
-    if (hidden) {
+    if ((threat & 0xff) == 0xff) { // hidden threat
       place_number(x, y, 0, -1);
-    } else if (threat & 0xff) {
+    } else if (threat) {
       place_number(x, y, 0, threat & 0xff);
     } else {
       place_number(x, y, 0, -3);
@@ -518,21 +500,29 @@ static void load_level(i32 diff, u32 seed) {
         }
       }
     }
-    // swap some lv1a/lv2/lv3 around for fun
+    // swap some empty/lv1a/lv2/lv3 around for fun
     for (i32 swap = 0; swap < 200; swap++) {
       i32 ai = 0, ap = 0;
       i32 bi = 0, bp = 0;
       for (i32 i = 0; i < BOARD_SIZE; i++) {
         i32 t = GET_TYPE(game->board[i]);
-        if (t == T_LV1A && rnd_pick(&rnd, ap++)) {
-          ai = i;
-        } else if ((t == T_LV2 || t == T_LV3) && rnd_pick(&rnd, bp++)) {
-          bi = i;
+        if (t == T_EMPTY || t == T_LV1A || t == T_LV2 || t == T_LV3) {
+          if (roll(&rnd, 2)) {
+            // give a first crack at it
+            if (rnd_pick(&rnd, ap++)) ai = i;
+            else if (rnd_pick(&rnd, bp++)) bi = i;
+          } else {
+            // give b first crack at it
+            if (rnd_pick(&rnd, bp++)) bi = i;
+            else if (rnd_pick(&rnd, ap++)) ai = i;
+          }
         }
       }
-      i32 temp = game->board[ai];
-      game->board[ai] = game->board[bi];
-      game->board[bi] = temp;
+      if (ap > 0 && bp > 0) {
+        i32 temp = game->board[ai];
+        game->board[ai] = game->board[bi];
+        game->board[bi] = temp;
+      }
     }
   }
 }
@@ -553,21 +543,26 @@ static void tile_update(i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return;
   u32 k = x + y * BOARD_W;
   u8 t = game->board[k];
+  i32 frame = IS_MONSTER(t) ? (rnd32(&g_rnd) & 1) : 0;
   switch (GET_STATUS(t)) {
     case S_HIDDEN:
       place_floor(x, y, 0);
       if (game->win) {
-        place_answer(x, y, 0);
+        place_answer(x, y, frame);
         place_number(x, y, 0, -3);
       } else {
-        clear_answer(x, y);
+        if (g_peek) {
+          place_answer(x, y, frame);
+        } else {
+          clear_answer(x, y);
+        }
         place_number(x, y, 4, game->notes[k]);
       }
       place_minehint(x, y, 0);
       break;
     case S_VISIBLE:
       place_floor(x, y, 0);
-      place_answer(x, y, 0);
+      place_answer(x, y, frame);
       if (game->difficulty & D_ONLYMINES) {
         place_number(x, y, 4, game->notes[k]);
       } else {
@@ -597,7 +592,7 @@ static void tile_update(i32 x, i32 y) {
       if (GET_TYPE(t) == T_MINE) {
         place_answer(x, y, 2);
       } else {
-        place_answer(x, y, 0);
+        place_answer(x, y, frame);
       }
       place_number(x, y, 0, -3);
       place_minehint(x, y, 0);
@@ -1090,6 +1085,7 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
             break;
         }
       } else {
+        // TODO: click book
       }
     }
   }
@@ -1298,8 +1294,20 @@ start_game:
   palette_fadefromblack();
 
   i32 levelup_cooldown = 0;
+  i32 next_tile_update = 5;
+  i32 hint_cooldown = 0;
+  i32 hint_cooldown_max = 15;
   for (;;) {
     if (levelup_cooldown > 0) levelup_cooldown--;
+    if (next_tile_update > 0) {
+      next_tile_update--;
+      if (next_tile_update == 0) {
+        i32 x = roll(&g_rnd, BOARD_W);
+        i32 y = roll(&g_rnd, BOARD_H);
+        tile_update(x, y);
+        next_tile_update = roll(&g_rnd, 7) + 5;
+      }
+    }
     nextframe();
     if (game->win) {
       // dead or won
@@ -1313,6 +1321,56 @@ start_game:
       }
     } else {
       // play the game!
+      if ((g_down & SYS_INPUT_ZL) && !(game->difficulty & D_ONLYMINES)) {
+        if (hint_cooldown > 0) {
+          hint_cooldown--;
+        } else {
+          // let the computer play
+          hint_cooldown = hint_cooldown_max;
+          if (hint_cooldown_max > 0) hint_cooldown_max--;
+          u32 hint = game_hint(game, handler);
+          u8 x = hint & 0xff;
+          u8 y = (hint >> 8) & 0xff;
+          u8 action = (hint >> 16) & 0xff;
+          i8 note = (hint >> 24) & 0xff;
+          sys_print("hint: %x %x %x %x", x, y, action, note);
+          switch (action) {
+            case 0: // click
+              game_hover(game, handler, x, y);
+              cursor_to_gamesel();
+              if (!game_click(game, handler)) {
+                sfx_bump();
+              }
+              break;
+            case 1: { // note
+              game_hover(game, handler, x, y);
+              cursor_to_gamesel();
+              game_note(game, handler, note);
+              break;
+            }
+            case 2: // levelup
+              if (!game_levelup(game, handler)) {
+                sfx_bump();
+              }
+              break;
+            default:
+              sfx_bump();
+              hint_cooldown = hint_cooldown_max = 30;
+              break;
+          }
+        }
+      } else {
+        hint_cooldown = 0;
+        hint_cooldown_max = 15;
+      }
+      if (g_hit & SYS_INPUT_ZR) {
+        g_peek = !g_peek;
+        for (i32 y = 0; y < BOARD_H; y++) {
+          for (i32 x = 0; x < BOARD_W; x++) {
+            tile_update(x, y);
+          }
+        }
+      }
       if (g_hit & SYS_INPUT_U) {
         move_game_cursor(0, -1);
       } else if (g_hit & SYS_INPUT_R) {

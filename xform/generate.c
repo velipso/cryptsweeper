@@ -189,9 +189,9 @@ static bool istile_lv6(u8 tile) {
   return GET_TYPE(tile) == T_LV6;
 }
 
-static bool istile_lv5cplus(u8 tile) {
+static bool istile_lv5bplus(u8 tile) {
   tile = GET_TYPE(tile);
-  return tile >= T_LV5C && tile <= T_LV13;
+  return tile >= T_LV5B && tile <= T_LV13;
 }
 
 static i32 count_tiles(const u8 *board, i32 x, i32 y, i32 rad, istile_f istile) {
@@ -438,7 +438,8 @@ restart:
   copy_board(copy, board);
   for (i32 attempt = 0; ; attempt++) {
     // place the rest randomly
-    place_random(board, rnd, T_LV5B, 8); // slime
+    place_random(board, rnd, T_LV5A, 8); // slime
+    place_random(board, rnd, T_LV5B, 1); // spider king
     place_random(board, rnd, T_LV5C, 2); // gazer
     place_random(board, rnd, T_LV1A, 12);
     place_random(board, rnd, T_LV2, 11);
@@ -451,8 +452,8 @@ restart:
     for (i32 y = 2; y < BOARD_H - 2; y++) {
       for (i32 x = 2; x < BOARD_W - 2; x++) {
         if (
-          // don't reveal gazers or anything higher
-          count_tiles(board, x, y, -2, istile_lv5cplus) == 0 &&
+          // don't reveal spider king or anything higher
+          count_tiles(board, x, y, -2, istile_lv5bplus) == 0 &&
           // exactly one wall
           count_tiles(board, x, y, -2, istile_wall) == 1 &&
           // exactly one chest with healing in it

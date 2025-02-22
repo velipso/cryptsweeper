@@ -99,6 +99,7 @@ struct game_st {
 #define GET_STATUSXY(b, x, y)     GET_STATUS((b)[(x) + (y) * BOARD_W])
 #define SET_STATUS(b, s)          b = GET_TYPE(b) | ((s) << 6)
 #define SET_STATUSXY(b, x, y, s)  do { i32 k = (x) + (y) * BOARD_W; SET_STATUS(b[k], s); } while (0)
+#define IS_MONSTER(b)             (GET_TYPE(b) >= T_LV1A && GET_TYPE(b) <= T_LV13)
 #define IS_CHEST(b)               (GET_TYPE(b) >= T_CHEST_HEAL && GET_TYPE(b) <= T_CHEST_EXP)
 #define IS_CHESTXY(b, x, y)       IS_CHEST((b)[(x) + (y) * BOARD_W])
 #define IS_ITEM(b)                (GET_TYPE(b) >= T_ITEM_HEAL && GET_TYPE(b) <= T_ITEM_EXIT)
@@ -124,3 +125,5 @@ i32 game_tileicon(u32 type);
 i32 max_hp(struct game_st *game);
 i32 max_exp(struct game_st *game);
 i32 count_threat(const u8 *board, i32 x, i32 y);
+u32 game_hint(struct game_st *game, game_handler_f handler);
+// byte 0: x, byte 1: y, byte 2: action (click, note, levelup), byte 3: note value

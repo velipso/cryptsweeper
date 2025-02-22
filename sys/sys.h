@@ -58,6 +58,10 @@ extern void memset8(void *dest, u32 data, u32 bytecount);
 #define SECTION_IWRAM_ARM  __attribute__((section(".iwram"), target("arm"), noinline))
 #define SECTION_ROM        __attribute__((section(".rodata")))
 
+#ifdef SYS_PRINT
+void sys_print(const char *fmt, ...);
+#endif
+
 static inline void sys_set_bg_config(
   i32 bgn,       // 0-3
   i32 priority,  // 0 (front) - 3 (back)

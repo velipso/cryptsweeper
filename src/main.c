@@ -208,7 +208,59 @@ static void place_answer(i32 x, i32 y, i32 frame) {
   }
 }
 
+static void place_lava(i32 x, i32 y) {
+  // construct bitmask for the 8 directions
+  i32 mask = 0;
+  for (i32 dy = -1, i = 0; dy <= 1; dy++) {
+    i32 by = y + dy;
+    for (i32 dx = -1; dx <= 1; dx++, i++) {
+      i32 bx = x + dx;
+      if (
+        bx >= 0 && bx < BOARD_W &&
+        by >= 0 && by < BOARD_H &&
+        GET_TYPEXY(game->board, bx, by) == T_LAVA
+      ) {
+        mask |= 1 << i;
+      }
+    }
+  }
+
+  u32 offset = (x + 1) * 4 + (y + 1) * 128;
+
+  // mask:
+  //  +---+---+---+
+  //  | 1 | 2 | 4 |
+  //  +---+---+---+
+  //  | 8 | 16| 32|  (center at 16 is always lava)
+  //  +---+---+---+
+  //  | 64|128|256|
+  //  +---+---+---+
+
+  // pick appropriate frames based on if lava is around this tile
+  int ul = 0, ur = 0, dl = 0, dr = 0;
+
+  if (mask &   2) { ul += 2; ur += 2; } // if up
+  if (mask & 128) { dl += 2; dr += 2; } // if down
+  if (mask &   8) { ul += 4; dl += 4; } // if left
+  if (mask &  32) { ur += 4; dr += 4; } // if right
+
+  // check for completely full
+  if ((mask & ( 1+  2+  8)) ==  1+  2+  8) ul += 2;
+  if ((mask & ( 2+  4+ 32)) ==  2+  4+ 32) ur += 2;
+  if ((mask & ( 8+ 64+128)) ==  8+ 64+128) dl += 2;
+  if ((mask & (32+128+256)) == 32+128+256) dr += 2;
+
+  sys_set_map(0x1f, offset +  0, 8 + ul);
+  sys_set_map(0x1f, offset +  2, 9 + ur);
+  sys_set_map(0x1f, offset + 64, 40 + dl);
+  sys_set_map(0x1f, offset + 66, 41 + dr);
+}
+
 static void place_floor(i32 x, i32 y, i32 state) {
+  if (GET_TYPEXY(game->board, x, y) == T_LAVA) {
+    place_lava(x, y);
+    return;
+  }
   u32 offset = (x + 1) * 4 + (y + 1) * 128;
   u32 r = 7;
   for (i32 i = 0; r >= 6; i++) {
@@ -462,7 +514,7 @@ static void load_level(i32 diff, u32 seed) {
     i32 same_score = 0;
     for (i32 y = 0, i = 0; y < BOARD_H; y++) {
       for (i32 x = 0; x < BOARD_W; x++, i++) {
-        if (game->board[i] == T_EMPTY) {
+        if (IS_EMPTY(game->board[i])) {
           i32 score = 0;
           for (i32 dy = -1; dy <= 1; dy++) {
             i32 by = dy + y;
@@ -470,7 +522,7 @@ static void load_level(i32 diff, u32 seed) {
             for (i32 dx = -1; dx <= 1; dx++) {
               i32 bx = dx + x;
               if (bx < 0 || bx >= BOARD_W) continue;
-              score += game->board[bx + by * BOARD_W] == T_EMPTY ? 1 : 0;
+              score += IS_EMPTY(game->board[bx + by * BOARD_W]) ? 1 : 0;
             }
           }
           if (score > best_score) {
@@ -500,19 +552,19 @@ static void load_level(i32 diff, u32 seed) {
         }
       }
     }
-    // swap some empty/lv1a/lv2/lv3 around for fun
+    // swap some empty/lv1a/lv2 around for fun
     for (i32 swap = 0; swap < 200; swap++) {
       i32 ai = 0, ap = 0;
       i32 bi = 0, bp = 0;
       for (i32 i = 0; i < BOARD_SIZE; i++) {
         i32 t = GET_TYPE(game->board[i]);
-        if (t == T_EMPTY || t == T_LV1A || t == T_LV2 || t == T_LV3) {
+        if (IS_EMPTY(t) || t == T_LV1A || t == T_LV2) {
           if (roll(&rnd, 2)) {
-            // give a first crack at it
+            // give `a` first crack at it
             if (rnd_pick(&rnd, ap++)) ai = i;
             else if (rnd_pick(&rnd, bp++)) bi = i;
           } else {
-            // give b first crack at it
+            // give `b` first crack at it
             if (rnd_pick(&rnd, bp++)) bi = i;
             else if (rnd_pick(&rnd, ap++)) ai = i;
           }
@@ -543,7 +595,7 @@ static void tile_update(i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return;
   u32 k = x + y * BOARD_W;
   u8 t = game->board[k];
-  i32 frame = IS_MONSTER(t) ? (rnd32(&g_rnd) & 1) : 0;
+  i32 frame = IS_MONSTER(t) && GET_TYPE(t) != T_LV11 ? (rnd32(&g_rnd) & 1) : 0;
   switch (GET_STATUS(t)) {
     case S_HIDDEN:
       place_floor(x, y, 0);
@@ -552,6 +604,7 @@ static void tile_update(i32 x, i32 y) {
         place_number(x, y, 0, -3);
       } else {
         if (g_peek) {
+          if (GET_TYPE(t) == T_LV11) frame = 1;
           place_answer(x, y, frame);
         } else {
           clear_answer(x, y);
@@ -571,7 +624,7 @@ static void tile_update(i32 x, i32 y) {
       place_minehint(x, y, 0);
       break;
     case S_PRESSED:
-      if (GET_TYPE(t) == T_EMPTY) {
+      if (IS_EMPTY(t)) {
         place_floor(x, y, 2);
         place_threat(x, y);
         clear_answer(x, y);
@@ -589,13 +642,15 @@ static void tile_update(i32 x, i32 y) {
       break;
     case S_KILLED:
       place_floor(x, y, 2);
-      if (GET_TYPE(t) == T_MINE) {
-        place_answer(x, y, 2);
+      if (GET_TYPE(t) == T_LV11) frame = 1;
+      else if (GET_TYPE(t) == T_MINE) frame = 2;
+      place_answer(x, y, frame);
+      if (IS_EMPTY(t)) {
+        place_threat(x, y);
       } else {
-        place_answer(x, y, frame);
+        place_number(x, y, 0, -3);
+        place_minehint(x, y, 0);
       }
-      place_number(x, y, 0, -3);
-      place_minehint(x, y, 0);
       break;
   }
 }
@@ -682,9 +737,12 @@ static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
     case EV_TILE_UPDATE: tile_update(x, y); break;
     case EV_HP_UPDATE:   hp_update(x, y);   break;
     case EV_EXP_UPDATE:  exp_update(x, y);  break;
+    case EV_SHOW_LAVA:   shake_screen();    break;
+    case EV_HOVER_LAVA:  shake_screen();    break;
     case EV_YOU_LOSE:    you_lose(x, y);    break;
     case EV_YOU_WIN:     you_win();         break;
     case EV_WAIT:        for (i32 i = 0; i < x; i++) nextframe(); break;
+    case EV_DEBUGLOG:    sys_print("[%x] value %x", x, y); break;
   }
 }
 

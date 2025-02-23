@@ -36,6 +36,12 @@ struct game_st {
   u8 hp;
   u8 exp;
   u8 win; // 0 = play, 1 = dead, 2 = win
+  struct {
+    i8 size;
+    u8 x[4];
+    u8 y[4];
+  } slimeking;
+  u8 losthp;
   i8 notes[BOARD_SIZE];
   u8 board[BOARD_SIZE];
   // SSTT:TTTT
@@ -52,38 +58,51 @@ struct game_st {
 #define D_ONLYMINES    0x10
 
 // tile types
-#define T_EMPTY       0
-#define T_LV1A        1
-#define T_LV1B        2
-#define T_LV2         3
-#define T_LV3         4
-#define T_LV4         5
-#define T_LV5A        6
-#define T_LV5B        7
-#define T_LV5C        8
-#define T_LV6         9
-#define T_LV7         10
-#define T_LV8         11
-#define T_LV9         12
-#define T_LV10        13
-#define T_LV11        14
-#define T_LV13        15
-#define T_MINE        16
-#define T_WALL        17
-#define T_CHEST_HEAL  18
-#define T_CHEST_EYE2  19
-#define T_CHEST_EXP   20
-// items:
-#define T_ITEM_HEAL   21
-#define T_ITEM_EYE    22
-#define T_ITEM_EYE2   23
-#define T_ITEM_SHOW1  24
-#define T_ITEM_SHOW5  25
-#define T_ITEM_EXP1   26
-#define T_ITEM_EXP3   27
-#define T_ITEM_EXP5   28
-#define T_ITEM_EXIT   29
-// max of 63
+enum game_type {
+  T_EMPTY     ,
+  T_LAVA      ,
+  T_LV1A      , /* spider */
+  T_LV1B      , /* slimeking */
+  T_LV2       ,
+  T_LV3A      , /* normal */
+  T_LV3B      , /* group 2 */
+  T_LV3C      , /* group 3 */
+  T_LV4A      , /* rook */
+  T_LV4B      , /* bishop */
+  T_LV4C      , /* knight */
+  T_LV5A      , /* slime */
+  T_LV5B      , /* spiderking */
+  T_LV5C      , /* gazer */
+  T_LV6       ,
+  T_LV7       ,
+  T_LV8       ,
+  T_LV9       ,
+  T_LV10      ,
+  T_LV11      , /* mimic */
+  T_LV13      ,
+  T_MINE      ,
+  T_WALL      ,
+  // chests:
+  T_CHEST_HEAL,
+  T_CHEST_EYE2,
+  T_CHEST_EXP ,
+  // items:
+  T_ITEM_HEAL ,
+  T_ITEM_EYE  ,
+  T_ITEM_EYE2 ,
+  T_ITEM_SHOW1,
+  T_ITEM_SHOW5,
+  T_ITEM_EXP1 ,
+  T_ITEM_EXP3 ,
+  T_ITEM_EXP5 ,
+  T_ITEM_EXP6 ,
+  T_ITEM_EXP9 ,
+  T_ITEM_LV3B0,
+  T_ITEM_LV3C0,
+  T_ITEM_LAVA ,
+  T_ITEM_EXIT
+  // max of 63
+};
 
 // tile status
 #define S_HIDDEN      0
@@ -91,7 +110,7 @@ struct game_st {
 #define S_PRESSED     2
 #define S_KILLED      3
 
-#define GET_TYPE(b)               ((b) & 0x3f)
+#define GET_TYPE(b)               ((enum game_type)((b) & 0x3f))
 #define GET_TYPEXY(b, x, y)       GET_TYPE((b)[(x) + (y) * BOARD_W])
 #define SET_TYPE(b, t)            b = ((b) & 0xc0) | (t)
 #define SET_TYPEXY(b, x, y, t)    do { i32 k = (x) + (y) * BOARD_W; SET_TYPE(b[k], t); } while (0)
@@ -99,6 +118,7 @@ struct game_st {
 #define GET_STATUSXY(b, x, y)     GET_STATUS((b)[(x) + (y) * BOARD_W])
 #define SET_STATUS(b, s)          b = GET_TYPE(b) | ((s) << 6)
 #define SET_STATUSXY(b, x, y, s)  do { i32 k = (x) + (y) * BOARD_W; SET_STATUS(b[k], s); } while (0)
+#define IS_EMPTY(b)               (GET_TYPE(b) == T_EMPTY || GET_TYPE(b) == T_LAVA)
 #define IS_MONSTER(b)             (GET_TYPE(b) >= T_LV1A && GET_TYPE(b) <= T_LV13)
 #define IS_CHEST(b)               (GET_TYPE(b) >= T_CHEST_HEAL && GET_TYPE(b) <= T_CHEST_EXP)
 #define IS_CHESTXY(b, x, y)       IS_CHEST((b)[(x) + (y) * BOARD_W])
@@ -109,9 +129,12 @@ enum game_event {
   EV_TILE_UPDATE, // (x, y) tile location
   EV_HP_UPDATE,   // (hp, max_hp)
   EV_EXP_UPDATE,  // (exp, max_exp)
+  EV_SHOW_LAVA,
+  EV_HOVER_LAVA,
   EV_YOU_LOSE,    // (x, y) tile that killed you
   EV_YOU_WIN,
-  EV_WAIT         // wait x number of frames
+  EV_WAIT,        // wait x number of frames
+  EV_DEBUGLOG     // (id, value)
 };
 
 typedef void (*game_handler_f)(struct game_st *game, enum game_event ev, i32 x, i32 y);

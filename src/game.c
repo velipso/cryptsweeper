@@ -30,11 +30,24 @@ void game_new(struct game_st *game, i32 difficulty, u32 seed) {
   game->difficulty = difficulty;
   game->win = 0;
   game->hp = max_hp(game);
+  game->slimeking.size = 0;
+  game->losthp = 0;
 }
 
-void game_hover(struct game_st *game, game_handler_f f_handler, i32 x, i32 y) {
+static i32 you_died(struct game_st *game, game_handler_f handler);
+void game_hover(struct game_st *game, game_handler_f handler, i32 x, i32 y) {
   game->selx = x;
   game->sely = y;
+  // hovering over lava?
+  if (GET_TYPEXY(game->board, x, y) == T_LAVA) {
+    if (game->hp == 0) {
+      you_died(game, handler);
+    } else {
+      game->hp--;
+      handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
+      handler(game, EV_HOVER_LAVA, 0, 0);
+    }
+  }
 }
 
 static void check_onlymines(struct game_st *game, game_handler_f handler) {
@@ -50,7 +63,7 @@ static void check_onlymines(struct game_st *game, game_handler_f handler) {
       for (i32 x = 0; x < BOARD_W; x++, k++) {
         if (board[k] == 2) {
           board[k] = 3;
-          if (game->board[k] == T_EMPTY) {
+          if (IS_EMPTY(game->board[k])) {
             if (count_threat(game->board, x, y) == 0) {
               for (i32 dy = -1; dy <= 1; dy++) {
                 i32 by = dy + y;
@@ -91,7 +104,7 @@ static void check_onlymines(struct game_st *game, game_handler_f handler) {
     bool won = true;
     for (i32 y = 0, k = 0; y < BOARD_H; y++) {
       for (i32 x = 0; x < BOARD_W; x++, k++) {
-        if (game->board[k] == T_EMPTY) {
+        if (IS_EMPTY(game->board[k])) {
           won = false;
         }
       }
@@ -117,7 +130,7 @@ bool game_click(struct game_st *game, game_handler_f handler) {
     }
   } else {
     if (GET_STATUS(game->board[k]) == S_PRESSED) {
-      if (GET_TYPE(game->board[k]) == T_EMPTY) {
+      if (IS_EMPTY(game->board[k])) {
         return false;
       }
       result = tile_info(game, handler, game->board[k], TI_COLLECT) == 0;
@@ -126,8 +139,13 @@ bool game_click(struct game_st *game, game_handler_f handler) {
         // can't click on flagged mines
         return false;
       }
-      SET_STATUS(game->board[k], S_PRESSED);
-      result = tile_info(game, handler, game->board[k], TI_ATTACK) == 0;
+      if (game->board[k] == T_LV11) {
+        // clicking a hidden mimic, so just make it visible, like a chest
+        SET_STATUS(game->board[k], S_VISIBLE);
+      } else {
+        SET_STATUS(game->board[k], S_PRESSED);
+        result = tile_info(game, handler, game->board[k], TI_ATTACK) == 0;
+      }
     }
     for (i32 dy = -2; dy <= 2; dy++) {
       for (i32 dx = -2; dx <= 2; dx++) {
@@ -276,12 +294,36 @@ static i32 attack_monster(struct game_st *game, game_handler_f handler) {
   return 0;
 }
 
+static i32 attack_monster_group(struct game_st *game, game_handler_f handler, i32 it0, i32 it1) {
+  u32 k = game->selx + game->sely * BOARD_W;
+  i32 exp = tile_info(game, handler, game->board[k], TI_THREAT);
+  if (exp > game->hp) {
+    game->hp = 0;
+    handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
+    return you_died(game, handler);
+  }
+  game->hp -= exp;
+  handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
+  i32 type = GET_TYPE(game->board[k]);
+  SET_TYPE(game->board[k], T_EMPTY);
+  // is this the last one?
+  bool last = true;
+  for (i32 i = 0; i < BOARD_SIZE && last; i++) {
+    last = GET_TYPE(game->board[i]) == type;
+  }
+  if (last) {
+    SET_TYPE(game->board[k], T_EMPTY);
+  } else {
+  }
+  return 0;
+}
+
 static void reveal(struct game_st *game, game_handler_f handler, i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return;
   i32 k = x + y * BOARD_W;
   if (GET_STATUS(game->board[k]) == S_HIDDEN) {
     if (
-      GET_TYPE(game->board[k]) == T_EMPTY ||
+      IS_EMPTY(game->board[k]) ||
       GET_TYPE(game->board[k]) == T_WALL ||
       IS_ITEM(game->board[k]) ||
       IS_CHEST(game->board[k])
@@ -303,6 +345,7 @@ static i32 tile_info(
   #define TILE(px, py)  (px >> 3) + ((py >> 3) << 5)
   switch (GET_TYPE(type)) {
     case T_EMPTY:
+    case T_LAVA:
       switch (action) {
         case TI_ICON: return 0;
         case TI_THREAT: return 0;
@@ -312,7 +355,7 @@ static i32 tile_info(
       break;
     case T_LV1A:
       switch (action) {
-        case TI_ICON: return TILE(160, 0);
+        case TI_ICON: return TILE(112, 16);
         case TI_THREAT: return 1;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -320,7 +363,7 @@ static i32 tile_info(
       break;
     case T_LV1B:
       switch (action) {
-        case TI_ICON: return TILE(160, 16);
+        case TI_ICON: return TILE(112, 32);
         case TI_THREAT: return 1;
         case TI_COLLECT: return collect_monster_item(game, handler, T_ITEM_SHOW5);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -328,23 +371,55 @@ static i32 tile_info(
       break;
     case T_LV2:
       switch (action) {
-        case TI_ICON: return TILE(160, 32);
+        case TI_ICON: return TILE(112, 48);
         case TI_THREAT: return 2;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
       }
       break;
-    case T_LV3:
+    case T_LV3A:
       switch (action) {
-        case TI_ICON: return TILE(160, 48);
+        case TI_ICON: return TILE(160, 0);
         case TI_THREAT: return 3;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
       }
       break;
-    case T_LV4:
+    case T_LV3B:
+      switch (action) {
+        case TI_ICON: return TILE(160, 16);
+        case TI_THREAT: return 3;
+        case TI_COLLECT: return collect_monster(game, handler);
+        case TI_ATTACK: return attack_monster_group(game, handler, T_ITEM_LV3B0, T_ITEM_EXP6);
+      }
+      break;
+    case T_LV3C:
+      switch (action) {
+        case TI_ICON: return TILE(160, 32);
+        case TI_THREAT: return 3;
+        case TI_COLLECT: return collect_monster(game, handler);
+        case TI_ATTACK: return attack_monster_group(game, handler, T_ITEM_LV3C0, T_ITEM_EXP9);
+      }
+      break;
+    case T_LV4A:
+      switch (action) {
+        case TI_ICON: return TILE(160, 48);
+        case TI_THREAT: return 4;
+        case TI_COLLECT: return collect_monster(game, handler);
+        case TI_ATTACK: return attack_monster(game, handler);
+      }
+      break;
+    case T_LV4B:
       switch (action) {
         case TI_ICON: return TILE(160, 64);
+        case TI_THREAT: return 4;
+        case TI_COLLECT: return collect_monster(game, handler);
+        case TI_ATTACK: return attack_monster(game, handler);
+      }
+      break;
+    case T_LV4C:
+      switch (action) {
+        case TI_ICON: return TILE(160, 80);
         case TI_THREAT: return 4;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -360,7 +435,7 @@ static i32 tile_info(
       break;
     case T_LV5B:
       switch (action) {
-        case TI_ICON: return TILE(160, 80);
+        case TI_ICON: return TILE(160, 112);
         case TI_THREAT: return 5;
         case TI_COLLECT: return collect_monster_item(game, handler, T_ITEM_SHOW1);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -368,7 +443,7 @@ static i32 tile_info(
       break;
     case T_LV5C:
       switch (action) {
-        case TI_ICON: return TILE(160, 112);
+        case TI_ICON: return TILE(208, 0);
         case TI_THREAT: return 5;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -376,7 +451,7 @@ static i32 tile_info(
       break;
     case T_LV6:
       switch (action) {
-        case TI_ICON: return TILE(208, 0);
+        case TI_ICON: return TILE(208, 16);
         case TI_THREAT: return 6;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -384,7 +459,7 @@ static i32 tile_info(
       break;
     case T_LV7:
       switch (action) {
-        case TI_ICON: return TILE(208, 16);
+        case TI_ICON: return TILE(208, 32);
         case TI_THREAT: return 7;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -392,7 +467,7 @@ static i32 tile_info(
       break;
     case T_LV8:
       switch (action) {
-        case TI_ICON: return TILE(208, 32);
+        case TI_ICON: return TILE(208, 48);
         case TI_THREAT: return 8;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -400,7 +475,7 @@ static i32 tile_info(
       break;
     case T_LV9:
       switch (action) {
-        case TI_ICON: return TILE(208, 48);
+        case TI_ICON: return TILE(208, 64);
         case TI_THREAT: return 9;
         case TI_COLLECT: return collect_monster_item(game, handler, T_ITEM_HEAL);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -408,15 +483,15 @@ static i32 tile_info(
       break;
     case T_LV10:
       switch (action) {
-        case TI_ICON: return TILE(208, 64);
+        case TI_ICON: return TILE(208, 80);
         case TI_THREAT: return 10;
-        case TI_COLLECT: return collect_monster(game, handler);
+        case TI_COLLECT: return collect_monster_item(game, handler, T_ITEM_LAVA);
         case TI_ATTACK: return attack_monster(game, handler);
       }
       break;
     case T_LV11:
       switch (action) {
-        case TI_ICON: return TILE(208, 80);
+        case TI_ICON: return TILE(208, 96);
         case TI_THREAT: return 11;
         case TI_COLLECT: return collect_monster(game, handler);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -424,7 +499,7 @@ static i32 tile_info(
       break;
     case T_LV13:
       switch (action) {
-        case TI_ICON: return TILE(208, 96);
+        case TI_ICON: return TILE(208, 112);
         case TI_THREAT: return 13;
         case TI_COLLECT: return collect_monster_item(game, handler, T_ITEM_EXIT);
         case TI_ATTACK: return attack_monster(game, handler);
@@ -432,7 +507,7 @@ static i32 tile_info(
       break;
     case T_MINE:
       switch (action) {
-        case TI_ICON: return TILE(64, 0);
+        case TI_ICON: return TILE(64, 16);
         case TI_THREAT: return 0x100;
         case TI_COLLECT: return you_died(game, handler);
         case TI_ATTACK: return you_died(game, handler);
@@ -440,7 +515,7 @@ static i32 tile_info(
       break;
     case T_WALL:
       switch (action) {
-        case TI_ICON: return TILE(128, 112);
+        case TI_ICON: return TILE(16, 96);
         case TI_THREAT: return 0;
         case TI_COLLECT: {
           if (game->hp <= 0) {
@@ -468,7 +543,7 @@ static i32 tile_info(
       break;
     case T_CHEST_HEAL:
       switch (action) {
-        case TI_ICON: return TILE(64, 16);
+        case TI_ICON: return TILE(64, 32);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_ITEM_HEAL);
         case TI_ATTACK: return 0;
@@ -476,7 +551,7 @@ static i32 tile_info(
       break;
     case T_CHEST_EYE2:
       switch (action) {
-        case TI_ICON: return TILE(64, 16);
+        case TI_ICON: return TILE(64, 32);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_ITEM_EYE2);
         case TI_ATTACK: return 0;
@@ -484,7 +559,7 @@ static i32 tile_info(
       break;
     case T_CHEST_EXP:
       switch (action) {
-        case TI_ICON: return TILE(64, 16);
+        case TI_ICON: return TILE(64, 32);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_ITEM_EXP5);
         case TI_ATTACK: return 0;
@@ -541,16 +616,12 @@ static i32 tile_info(
                       score++;
                     }
                     score += 3;
-                    switch (GET_TYPE(t)) {
-                      case T_LV8:
-                        score -= 10;
-                        break;
-                      case T_MINE:
-                        minecount++;
-                        break;
-                      case T_WALL:
-                        wallcount++;
-                        break;
+                    if (GET_TYPE(t) == T_LV8) {
+                      score -= 10;
+                    } else if (GET_TYPE(t) == T_MINE) {
+                      minecount++;
+                    } else if (GET_TYPE(t) == T_WALL) {
+                      wallcount++;
                     }
                   }
                 }
@@ -650,9 +721,68 @@ static i32 tile_info(
         case TI_ATTACK: return 0;
       }
       break;
-    case T_ITEM_EXIT:
+    case T_ITEM_EXP6:
       switch (action) {
         case TI_ICON: return TILE(112, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT:
+          award_exp(game, handler, 6);
+          return replace_type(game, handler, T_EMPTY);
+        case TI_ATTACK: return 0;
+      }
+      break;
+    case T_ITEM_EXP9:
+      switch (action) {
+        case TI_ICON: return TILE(128, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT:
+          award_exp(game, handler, 9);
+          return replace_type(game, handler, T_EMPTY);
+        case TI_ATTACK: return 0;
+      }
+      break;
+    case T_ITEM_LV3B0:
+      switch (action) {
+        case TI_ICON: return TILE(32, 96);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return replace_type(game, handler, T_EMPTY);
+        case TI_ATTACK: return 0;
+      }
+      break;
+    case T_ITEM_LV3C0:
+      switch (action) {
+        case TI_ICON: return TILE(48, 96);
+        case TI_THREAT: return 0;
+        case TI_COLLECT: return replace_type(game, handler, T_EMPTY);
+        case TI_ATTACK: return 0;
+      }
+      break;
+    case T_ITEM_LAVA:
+      switch (action) {
+        case TI_ICON: return TILE(144, 112);
+        case TI_THREAT: return 0;
+        case TI_COLLECT:
+          handler(game, EV_SHOW_LAVA, 0, 0);
+          for (i32 y = 0, k = 0; y < BOARD_H; y++) {
+            for (i32 x = 0; x < BOARD_W; x++, k++) {
+              if (GET_TYPE(game->board[k]) == T_MINE) {
+                SET_TYPE(game->board[k], T_LAVA);
+                SET_STATUS(game->board[k], S_PRESSED);
+                for (i32 dy = -1; dy <= 1; dy++) {
+                  for (i32 dx = -1; dx <= 1; dx++) {
+                    handler(game, EV_TILE_UPDATE, x + dx, y + dy);
+                  }
+                }
+              }
+            }
+          }
+          return replace_type(game, handler, T_EMPTY);
+        case TI_ATTACK: return 0;
+      }
+      break;
+    case T_ITEM_EXIT:
+      switch (action) {
+        case TI_ICON: return TILE(0, 96);
         case TI_THREAT: return 0;
         case TI_COLLECT:
           game->win = 2;
@@ -715,7 +845,7 @@ static bool tile_could_threat(struct game_st *game, i32 x, i32 y, i32 threat) {
       i32 bk = bx + by * BOARD_W;
       i32 s = GET_STATUS(game->board[bk]);
       i32 t = GET_TYPE(game->board[bk]);
-      if (s == S_PRESSED && t == T_EMPTY) {
+      if (s == S_PRESSED && IS_EMPTY(t)) {
         i32 ct = remaining_count_threat(game, bx, by);
         if (threat > ct) {
           // an adjacent cell is telling us that the real threat can't exceed ct
@@ -728,6 +858,108 @@ static bool tile_could_threat(struct game_st *game, i32 x, i32 y, i32 threat) {
   return true;
 }
 
+static i32 gazer_evidence(struct game_st *game, i32 x, i32 y) { // -1 = impossible
+  i32 evidence = 0;
+  i32 w = 0;
+  for (i32 dy = -2; dy <= 2; dy++) {
+    i32 by = dy + y;
+    if (by < 0 || by >= BOARD_H) goto next_dy;
+    for (i32 dx = -w; dx <= w; dx++) {
+      i32 bx = dx + x;
+      if (bx < 0 || bx >= BOARD_W) continue;
+      i32 k = bx + by * BOARD_W;
+      if (dx == 0 && dy == 0) {
+        switch (GET_STATUS(game->board[k])) {
+          case S_HIDDEN:
+            if (game->notes[k] == 5) {
+              evidence++;
+            } else if (game->notes[k] != -3) {
+              return -1;
+            }
+            break;
+          case S_VISIBLE:
+          case S_PRESSED:
+            return GET_TYPE(game->board[k]) == T_LV5C ? 999 : -1;
+        }
+      } else if (
+        GET_STATUS(game->board[k]) != S_HIDDEN &&
+        IS_EMPTY(game->board[k])
+      ) {
+        i32 th = count_threat(game->board, bx, by);
+        if ((th & 0xff) == 0xff) {
+          evidence++;
+        } else {
+          return -1;
+        }
+      }
+    }
+next_dy:
+    if (dy < 0) w++;
+    else w--;
+  }
+  return evidence;
+}
+
+static i32 slimeking_evidence(struct game_st *game, i32 x, i32 y) { // -1 = impossible
+  i32 evidence = 0;
+  for (i32 dy = -2; dy <= 2; dy++) {
+    i32 by = dy + y;
+    if (by < 0 || by >= BOARD_H) continue;
+    for (i32 dx = -2; dx <= 2; dx++) {
+      i32 bx = dx + x;
+      if (bx < 0 || bx >= BOARD_W) continue;
+      i32 k = bx + by * BOARD_W;
+      if (dx == 0 && dy == 0) {
+        switch (GET_STATUS(game->board[k])) {
+          case S_HIDDEN:
+            if (game->notes[k] != 1 && game->notes[k] != -3) {
+              return -1;
+            }
+            break;
+          case S_VISIBLE:
+          case S_PRESSED:
+            return GET_TYPE(game->board[k]) == T_LV1B ? 10 : -1;
+        }
+      } else if (dx >= -1 && dx <= 1 && dy >= -1 && dy <= 1) {
+        // needs to be an 8
+        i32 th = known_threat_at(game, bx, by);
+        if (th == 8) {
+          evidence++;
+        } else if (th >= 0) {
+          return -1;
+        }
+      } else {
+        // needs to *not* be an 8
+        i32 th = known_threat_at(game, bx, by);
+        if (th == 8) {
+          return -1;
+        }
+      }
+    }
+  }
+  return evidence;
+}
+
+static i32 count_hidden(struct game_st *game, i32 x, i32 y) {
+  i32 hidden = 0;
+  for (i32 dy = -1; dy <= 1; dy++) {
+    i32 by = dy + y;
+    if (by < 0 || by >= BOARD_H) continue;
+    for (i32 dx = -1; dx <= 1; dx++) {
+      i32 bx = dx + x;
+      if (bx < 0 || bx >= BOARD_W) continue;
+      i32 bk = bx + by * BOARD_W;
+      if (
+        GET_STATUS(game->board[bk]) == S_HIDDEN &&
+        game->notes[bk] == -3
+      ) {
+        hidden++;
+      }
+    }
+  }
+  return hidden;
+}
+
 u32 game_hint(struct game_st *game, game_handler_f handler) {
   #define H_CLICK(x, y)    (0x00000000 | (x) | ((y) << 8))
   #define H_NOTE(x, y, n)  (0x00010000 | (x) | ((y) << 8) | (((u8)n) << 24))
@@ -738,32 +970,46 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
     // level up aggressively to restore health asap
     return H_LEVELUP();
   }
-  i32 heal_x = -1, heal_y = -1;
+  i32 heal_score = 0, heal_x = -1, heal_y = -1;
   for (i32 y = 0, k = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++, k++) {
       i32 s = GET_STATUS(game->board[k]);
       i32 t = GET_TYPE(game->board[k]);
       if ((s == S_VISIBLE || s == S_PRESSED) && t == T_ITEM_HEAL) {
-        heal_x = x;
-        heal_y = y;
+        i32 score = count_hidden(game, x, y);
+        if (heal_x < 0 || score > heal_score) {
+          heal_score = score;
+          heal_x = x;
+          heal_y = y;
+        }
       }
       if (
         // always collect items (except healing), exp, and chests ASAP
         ((s == S_VISIBLE || s == S_PRESSED) && (
           t == T_ITEM_EYE ||
           t == T_ITEM_EYE2 ||
+          t == T_ITEM_SHOW1 ||
+          t == T_ITEM_SHOW5 ||
           t == T_ITEM_EXP1 ||
           t == T_ITEM_EXP3 ||
           t == T_ITEM_EXP5 ||
-          t == T_ITEM_SHOW1 ||
-          t == T_ITEM_SHOW5 ||
+          t == T_ITEM_EXP6 ||
+          t == T_ITEM_EXP9 ||
+          t == T_ITEM_LV3B0 ||
+          t == T_ITEM_LV3C0 ||
+          t == T_ITEM_LAVA ||
           t == T_ITEM_EXIT ||
-          IS_CHEST(t)
+          IS_CHEST(t) ||
+          (game->hp >= 13 && t == T_LV13) // finish the game ASAP!
         )) ||
         (s == S_PRESSED && IS_MONSTER(t))
       ) {
+        if (t == T_ITEM_EXIT) {
+          // about to win, print stats
+          handler(game, EV_DEBUGLOG, 0, game->losthp);
+        }
         return H_CLICK(x, y);
-      } else if (s == S_PRESSED && t == T_EMPTY) {
+      } else if (s == S_PRESSED && IS_EMPTY(t)) {
         // attempt to note adjacent cells based on this threat
         i32 threat = remaining_count_threat(game, x, y);
         i32 ux = -1, uy = -1, uc = 0;
@@ -800,73 +1046,150 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
     }
   }
 
-  // find a useful cell to challenge
-  i32 best_score = 0;
-  i32 same_score = 0;
-  i32 best_x = -1;
-  i32 best_y = -1;
-  for (i32 y = 0, k = 0; y < BOARD_H; y++) {
-    for (i32 x = 0; x < BOARD_W; x++, k++) {
-      i32 score = 0;
-
-      // get the threat (or worst case scenario)
-      i32 threat = known_threat_at(game, x, y);
-      if (threat < 0) { // unknown threat, calculate worst case
-        score += 100; // favor cells that have unknown threats
-        threat = 0x100;
-        if (!tile_could_threat(game, x, y, 0x100)) {
-          for (i32 ct = 11; ct >= 1; ct--) {
-            if (tile_could_threat(game, x, y, ct)) {
-              threat = ct;
-              break;
-            }
+  { // find and kill slimeking
+    if (game->slimeking.size == 0) {
+      // phase 1 - find potential locations
+      #define CHECK(sx, sy)  do {                          \
+          if (slimeking_evidence(game, sx, sy) > 0) {      \
+            game->slimeking.x[game->slimeking.size] = sx;  \
+            game->slimeking.y[game->slimeking.size] = sy;  \
+            game->slimeking.size++;                        \
+          }                                                \
+        } while (0)
+      for (i32 y = 1; y < BOARD_H - 1; y++) {
+        CHECK(0, y);
+        CHECK(BOARD_W - 1, y);
+      }
+      for (i32 x = 1; x < BOARD_W - 1; x++) {
+        CHECK(x, 0);
+        CHECK(x, BOARD_H - 1);
+      }
+      #undef CHECK
+    }
+    if (game->slimeking.size > 1) {
+      // phase 2 - eliminate until only one left
+      for (i32 i = 0; i < game->slimeking.size; i++) {
+        if (slimeking_evidence(game, game->slimeking.x[i], game->slimeking.y[i]) < 0) {
+          // this one is eliminated
+          game->slimeking.size--;
+          for (i32 j = i; j < game->slimeking.size; j++) {
+            game->slimeking.x[j] = game->slimeking.x[j + 1];
+            game->slimeking.y[j] = game->slimeking.y[j + 1];
           }
+          i--;
         }
       }
+    }
+    if (game->slimeking.size == 1) {
+      // phase 3 - kill it! or note it if no HP
+      if (game->hp >= 1) {
+        game->slimeking.size = -1; // all done!
+        return H_CLICK(game->slimeking.x[0], game->slimeking.y[0]);
+      }
+      return H_NOTE(game->slimeking.x[0], game->slimeking.y[0], 1);
+    }
+  }
 
-      if (threat == 0) {
-        if (GET_STATUS(game->board[k]) == S_HIDDEN) {
-          // click hidden non-threats immediately
-          return H_CLICK(x, y);
-        }
-      } else if (threat <= game->hp) {
-        // we *could* kill this monster... should we?
-        // see how many cells we would get information about
-        i32 hidden = 0;
-        for (i32 dy = -1; dy <= 1; dy++) {
-          i32 by = dy + y;
-          if (by < 0 || by >= BOARD_H) continue;
-          for (i32 dx = -1; dx <= 1; dx++) {
-            i32 bx = dx + x;
-            if (bx < 0 || bx >= BOARD_W) continue;
-            if (GET_STATUSXY(game->board, bx, by) == S_HIDDEN) {
-              hidden++;
+  { // mirror lv9's and kill them if we can
+    for (i32 y = 0, k = 0; y < BOARD_H; y++) {
+      for (i32 x = 0; x < BOARD_W; x++, k++) {
+        if (known_threat_at(game, x, y) == 9) {
+          // find mirror
+          i32 mx = BOARD_W - x - 1;
+          if (known_threat_at(game, mx, y) < 0) {
+            return H_NOTE(mx, y, 9);
+          } else {
+            // we know about both lv9's, so see if we can kill one
+            if (game->hp >= 9) {
+              bool s1 = GET_STATUSXY(game->board, x, y) == S_HIDDEN;
+              bool s2 = GET_STATUSXY(game->board, mx, y) == S_HIDDEN;
+              if (s1 && s2) {
+                // could kill either, favor the one with most hidden's
+                if (count_hidden(game, x, y) > count_hidden(game, mx, y)) {
+                  return H_CLICK(x, y);
+                } else {
+                  return H_CLICK(mx, y);
+                }
+              } else if (s1) {
+                return H_CLICK(x, y);
+              } else if (s2) {
+                return H_CLICK(mx, y);
+              }
             }
           }
-        }
-        score += threat * 3; // favor higher level monsters
-        score += hidden * 4; // favor cells next to unknowns
-      } else {
-        // this cell would kill us!
-        continue;
-      }
-      if (score <= 0) continue;
-      if (score > best_score) {
-        best_score = score;
-        same_score = 0;
-        best_x = x;
-        best_y = y;
-      } else if (score == best_score) {
-        same_score++;
-        if (rnd_pick(&game->rnd, same_score)) {
-          best_x = x;
-          best_y = y;
         }
       }
     }
   }
-  if (best_x >= 0) {
-    return H_CLICK(best_x, best_y);
+
+  { // find a useful cell to challenge
+    i32 best_score = 0;
+    i32 same_score = 0;
+    i32 best_x = -1;
+    i32 best_y = -1;
+    for (i32 y = 0, k = 0; y < BOARD_H; y++) {
+      for (i32 x = 0; x < BOARD_W; x++, k++) {
+        i32 score = 0;
+
+        // get the threat (or worst case scenario)
+        i32 threat = known_threat_at(game, x, y);
+        if (threat < 0) { // unknown threat, calculate worst case
+          score += 100; // favor cells that have unknown threats
+          threat = 0x100;
+          if (!tile_could_threat(game, x, y, 0x100)) {
+            for (i32 ct = 11; ct >= 1; ct--) {
+              if (tile_could_threat(game, x, y, ct)) {
+                threat = ct;
+                break;
+              }
+            }
+          }
+        }
+        i32 gazer = threat >= 5 ? gazer_evidence(game, x, y) : -1;
+        i32 hidden = 0;
+
+        if (threat == 0) {
+          if (GET_STATUS(game->board[k]) == S_HIDDEN) {
+            // click hidden non-threats immediately
+            return H_CLICK(x, y);
+          }
+        } else if (threat <= game->hp) {
+          // we *could* kill this monster... should we?
+          // see how many cells we would get information about
+          hidden = count_hidden(game, x, y);
+          score += gazer;
+          if (threat == 1 || threat == 2) { // try to save lv1-2 for later
+            score += threat;
+          } else {
+            score += threat * 3; // favor higher level monsters
+          }
+          score += hidden * 4; // favor cells next to unknowns
+        } else if (gazer > 0) {
+          // there is a chance this cell is a gazer
+          if (game->hp >= 5 && threat < 0x100 && gazer >= 4) score += gazer;
+          else continue;
+        } else {
+          // this cell would kill us!
+          continue;
+        }
+        if (score <= 0) continue;
+        if (score > best_score) {
+          best_score = score;
+          same_score = 0;
+          best_x = x;
+          best_y = y;
+        } else if (score == best_score) {
+          same_score++;
+          if (rnd_pick(&game->rnd, same_score)) {
+            best_x = x;
+            best_y = y;
+          }
+        }
+      }
+    }
+    if (best_x >= 0) {
+      return H_CLICK(best_x, best_y);
+    }
   }
 
   // not enough HP to make progress, so try and kill a wall
@@ -877,6 +1200,8 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
           GET_STATUS(game->board[i]) != S_HIDDEN &&
           GET_TYPE(game->board[i]) == T_WALL
         ) {
+          game->losthp++;
+          handler(game, EV_DEBUGLOG, 0x10, game->losthp);
           return H_CLICK(x, y);
         }
       }
@@ -885,13 +1210,22 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
 
   // no other action, so heal if possible
   if (game->exp >= max_exp(game)) {
+    game->losthp += game->hp;
+    if (game->hp > 0) {
+      handler(game, EV_DEBUGLOG, 0x11, game->losthp);
+    }
     return H_LEVELUP();
   } else if (heal_x >= 0) {
+    game->losthp += game->hp;
+    if (game->hp > 0) {
+      handler(game, EV_DEBUGLOG, 0x12, game->losthp);
+    }
     return H_CLICK(heal_x, heal_y);
   }
 
   // oh boy, I guess we're screwed
 
+  handler(game, EV_DEBUGLOG, 0xff, game->losthp);
   return H_GIVEUP();
   #undef H_CLICK
   #undef H_NOTE

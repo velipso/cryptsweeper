@@ -349,6 +349,10 @@ static int levels(int count, int seed, const char *output) {
     u8 levels[128 * 6] = {0};
     for (int i = 0; i < 5; i++) {
       generate_normal(&levels[128 * i], i, &rnd);
+      if (group < 2) {
+        printf("group %d difficulty %d\n", group, i);
+        print_board(&levels[128 * i]);
+      }
     }
     for (int i = 0; i < 5; i++) {
       u8 board[BOARD_SIZE];

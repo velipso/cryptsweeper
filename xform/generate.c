@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include "generate.h"
 
-static void print_board(u8 *board) {
+void print_board(const u8 *board) {
   for (i32 y = 0, k = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++, k++) {
       i32 t = GET_TYPE(board[k]);
@@ -24,8 +24,12 @@ static void print_board(u8 *board) {
         case T_LV1A : printf("1A "); break;
         case T_LV1B : printf("1B "); break;
         case T_LV2  : printf("2X "); break;
-        case T_LV3  : printf("3X "); break;
-        case T_LV4  : printf("4X "); break;
+        case T_LV3A : printf("3A "); break;
+        case T_LV3B : printf("3B "); break;
+        case T_LV3C : printf("3C "); break;
+        case T_LV4A : printf("4A "); break;
+        case T_LV4B : printf("4B "); break;
+        case T_LV4C : printf("4C "); break;
         case T_LV5A : printf("5A "); break;
         case T_LV5B : printf("5B "); break;
         case T_LV5C : printf("5C "); break;
@@ -333,18 +337,33 @@ restart:
     }
   }
 
-  for (i32 i = 0; i < 4; i++) { // four lv7's in different quadrants
-    for (i32 attempt = 0; ; attempt++) {
-      i32 x = roll(rnd, BOARD_CW - 1);
-      i32 y = roll(rnd, BOARD_CH);
-      if (i & 1) x += BOARD_CW + 1;
-      if (i & 2) y += BOARD_CH + 1;
-      if (!GET_TYPEXY(board, x, y)) {
-        SET_TYPEXY(board, x, y, T_LV7);
-        break;
-      }
-      if (attempt > 100) goto restart;
+  for (i32 attempt = 0; ; attempt++) { // four lv7's in a box
+    const i32 minw = 5, minh = 4;
+    i32 w = roll(rnd, BOARD_W - 1 - minw) + minw;
+    i32 h = roll(rnd, BOARD_H - 1 - minh) + minh;
+    i32 x1 = roll(rnd, BOARD_W - w);
+    i32 y1 = roll(rnd, BOARD_H - h);
+    i32 x2 = x1 + w;
+    i32 y2 = y1 + h;
+    if (
+      w >= minw &&
+      h >= minh &&
+      x1 >= 0 && x1 < BOARD_W &&
+      y1 >= 0 && y1 < BOARD_H &&
+      x2 >= 0 && x2 < BOARD_W &&
+      y2 >= 0 && y2 < BOARD_H &&
+      !GET_TYPEXY(board, x1, y1) &&
+      !GET_TYPEXY(board, x2, y1) &&
+      !GET_TYPEXY(board, x1, y2) &&
+      !GET_TYPEXY(board, x2, y2)
+    ) {
+      SET_TYPEXY(board, x1, y1, T_LV7);
+      SET_TYPEXY(board, x2, y1, T_LV7);
+      SET_TYPEXY(board, x1, y2, T_LV7);
+      SET_TYPEXY(board, x2, y2, T_LV7);
+      break;
     }
+    if (attempt > 100) goto restart;
   }
 
   for (i32 i = 0; i < 4; i++) { // place lv4's in horizontal or vertical pairs
@@ -357,8 +376,8 @@ restart:
           !GET_TYPEXY(board, x, y) &&
           !GET_TYPEXY(board, x, y + 1)
         ) {
-          SET_TYPEXY(board, x, y, T_LV4);
-          SET_TYPEXY(board, x, y + 1, T_LV4);
+          SET_TYPEXY(board, x, y, T_LV4A);
+          SET_TYPEXY(board, x, y + 1, T_LV4A);
           break;
         }
       } else {
@@ -369,8 +388,8 @@ restart:
           !GET_TYPEXY(board, x, y) &&
           !GET_TYPEXY(board, x + 1, y)
         ) {
-          SET_TYPEXY(board, x, y, T_LV4);
-          SET_TYPEXY(board, x + 1, y, T_LV4);
+          SET_TYPEXY(board, x, y, T_LV4A);
+          SET_TYPEXY(board, x + 1, y, T_LV4A);
           break;
         }
       }
@@ -443,7 +462,7 @@ restart:
     place_random(board, rnd, T_LV5C, 2); // gazer
     place_random(board, rnd, T_LV1A, 12);
     place_random(board, rnd, T_LV2, 11);
-    place_random(board, rnd, T_LV3, 9);
+    place_random(board, rnd, T_LV3A, 9);
     place_random(board, rnd, T_LV11, 1);
     // final placement is the starting location, which should reveal certain things
     i32 bx = -1;

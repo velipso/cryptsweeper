@@ -119,6 +119,7 @@ enum game_type {
 #define SET_STATUS(b, s)          b = GET_TYPE(b) | ((s) << 6)
 #define SET_STATUSXY(b, x, y, s)  do { i32 k = (x) + (y) * BOARD_W; SET_STATUS(b[k], s); } while (0)
 #define IS_EMPTY(b)               (GET_TYPE(b) == T_EMPTY || GET_TYPE(b) == T_LAVA)
+#define IS_EMPTYXY(b, x, y)       IS_EMPTY((b)[(x) + (y) * BOARD_W])
 #define IS_MONSTER(b)             (GET_TYPE(b) >= T_LV1A && GET_TYPE(b) <= T_LV13)
 #define IS_CHEST(b)               (GET_TYPE(b) >= T_CHEST_HEAL && GET_TYPE(b) <= T_CHEST_EXP)
 #define IS_CHESTXY(b, x, y)       IS_CHEST((b)[(x) + (y) * BOARD_W])

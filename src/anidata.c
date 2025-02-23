@@ -576,3 +576,76 @@ const u16 ani_title_delete2[] = {
   X(32),
   STOP()
 };
+
+const u16 ani_lv1b[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(0, 192),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};
+const u16 ani_lv1b_dead[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(64, 192),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};
+const u16 ani_lv5b[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(32, 192),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};
+const u16 ani_lv5b_dead[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(96, 192),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};
+const u16 ani_lv10[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(0, 224),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};
+const u16 ani_lv10_dead[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(64, 224),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};
+const u16 ani_lv13[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(32, 224),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};
+const u16 ani_lv13_dead[] = {
+  RESET(),
+  SIZE_32x32(),
+  TILEXY(96, 224),
+  PRIORITY(1),
+  X(-8),
+  Y(-8),
+  STOP()
+};

@@ -232,7 +232,7 @@ static void place_random(u8 *board, struct rnd_st *rnd, i32 value, i32 count) {
     for (;;) {
       i32 x = roll(rnd, BOARD_W);
       i32 y = roll(rnd, BOARD_H);
-      if (!GET_TYPEXY(board, x, y)) {
+      if (IS_EMPTYXY(board, x, y)) {
         board[x + y * BOARD_W] = value;
         break;
       }
@@ -240,8 +240,10 @@ static void place_random(u8 *board, struct rnd_st *rnd, i32 value, i32 count) {
   }
 }
 
-static void copy_board(u8 *dst, u8 *src) {
-  for (i32 i = 0; i < BOARD_SIZE; i++) dst[i] = src[i];
+static void copy_board(u8 *dst, const u8 *src) {
+  for (i32 i = 0; i < BOARD_SIZE; i++) {
+    dst[i] = src[i];
+  }
 }
 
 void generate_normal(u8 *board, i32 diff, struct rnd_st *rnd) {
@@ -285,7 +287,7 @@ restart:
       case 2: x = 0; y = BOARD_H - 1; break;
       case 3: x = BOARD_W - 1; y = BOARD_H - 1; break;
     }
-    if (!GET_TYPEXY(board, x, y)) {
+    if (IS_EMPTYXY(board, x, y)) {
       SET_TYPEXY(board, x, y, T_LV10);
       break;
     }
@@ -296,7 +298,7 @@ restart:
     i32 x1 = BOARD_CW - 1 - dx;
     i32 x2 = BOARD_CW + dx;
     i32 y = roll(rnd, BOARD_H);
-    if (!GET_TYPEXY(board, x1, y) && !GET_TYPEXY(board, x2, y)) {
+    if (IS_EMPTYXY(board, x1, y) && IS_EMPTYXY(board, x2, y)) {
       SET_TYPEXY(board, x1, y, T_LV9);
       SET_TYPEXY(board, x2, y, T_LV9);
       break;
@@ -305,34 +307,25 @@ restart:
 
   for (i32 i = 0; i < 3; i++) { // walls come in pairs
     for (;;) {
-      if (roll(rnd, 2)) {
-        // vertical
-        i32 x = roll(rnd, BOARD_W - 2) + 1;
-        i32 y = roll(rnd, BOARD_H - 1);
-        if (
-          !GET_TYPEXY(board, x, y) &&
-          !GET_TYPEXY(board, x, y + 1) &&
-          count_tiles(board, x, y, 2, istile_wall) == 0 &&
-          count_tiles(board, x, y + 1, 2, istile_wall) == 0
-        ) {
-          SET_TYPEXY(board, x, y, T_WALL);
-          SET_TYPEXY(board, x, y + 1, T_WALL);
-          break;
-        }
-      } else {
-        // horizontal
-        i32 x = roll(rnd, BOARD_W - 1);
-        i32 y = roll(rnd, BOARD_H - 2) + 1;
-        if (
-          !GET_TYPEXY(board, x, y) &&
-          !GET_TYPEXY(board, x + 1, y) &&
-          count_tiles(board, x, y, 2, istile_wall) == 0 &&
-          count_tiles(board, x + 1, y, 2, istile_wall) == 0
-        ) {
-          SET_TYPEXY(board, x, y, T_WALL);
-          SET_TYPEXY(board, x + 1, y, T_WALL);
-          break;
-        }
+      i32 x1, y1, x2, y2;
+      if (roll(rnd, 2)) { // vertical
+        x1 = x2 = roll(rnd, BOARD_W - 2) + 1;
+        y1 = roll(rnd, BOARD_H - 1);
+        y2 = y1 + 1;
+      } else { // horizontal
+        x1 = roll(rnd, BOARD_W - 1);
+        x2 = x1 + 1;
+        y1 = y2 = roll(rnd, BOARD_H - 2) + 1;
+      }
+      if (
+        IS_EMPTYXY(board, x1, y1) &&
+        IS_EMPTYXY(board, x2, y2) &&
+        count_tiles(board, x1, y1, 2, istile_wall) == 0 &&
+        count_tiles(board, x2, y2, 2, istile_wall) == 0
+      ) {
+        SET_TYPEXY(board, x1, y1, T_WALL);
+        SET_TYPEXY(board, x2, y2, T_WALL);
+        break;
       }
     }
   }
@@ -352,10 +345,10 @@ restart:
       y1 >= 0 && y1 < BOARD_H &&
       x2 >= 0 && x2 < BOARD_W &&
       y2 >= 0 && y2 < BOARD_H &&
-      !GET_TYPEXY(board, x1, y1) &&
-      !GET_TYPEXY(board, x2, y1) &&
-      !GET_TYPEXY(board, x1, y2) &&
-      !GET_TYPEXY(board, x2, y2)
+      IS_EMPTYXY(board, x1, y1) &&
+      IS_EMPTYXY(board, x2, y1) &&
+      IS_EMPTYXY(board, x1, y2) &&
+      IS_EMPTYXY(board, x2, y2)
     ) {
       SET_TYPEXY(board, x1, y1, T_LV7);
       SET_TYPEXY(board, x2, y1, T_LV7);
@@ -366,32 +359,60 @@ restart:
     if (attempt > 100) goto restart;
   }
 
-  for (i32 i = 0; i < 4; i++) { // place lv4's in horizontal or vertical pairs
+  for (i32 i = 0; i < 4; i++) { // four pairs of lv4's in formation
     for (i32 attempt = 0; ; attempt++) {
-      if (roll(rnd, 2)) {
-        // vertical
-        i32 x = roll(rnd, BOARD_W - 2) + 1;
-        i32 y = roll(rnd, BOARD_H - 1);
-        if (
-          !GET_TYPEXY(board, x, y) &&
-          !GET_TYPEXY(board, x, y + 1)
-        ) {
-          SET_TYPEXY(board, x, y, T_LV4A);
-          SET_TYPEXY(board, x, y + 1, T_LV4A);
+      i32 x1, y1, x2, y2, t;
+      switch (roll(rnd, 3)) {
+        case 0: // rooks
+          t = T_LV4A;
+          if (roll(rnd, 2)) { // vertical pair
+            x1 = x2 = roll(rnd, BOARD_W - 2) + 1;
+            y1 = roll(rnd, BOARD_H - 1);
+            y2 = y1 + 1;
+          } else { // horizontal pair
+            x1 = roll(rnd, BOARD_W - 1);
+            x2 = x1 + 1;
+            y1 = y2 = roll(rnd, BOARD_H - 2) + 1;
+          }
           break;
-        }
-      } else {
-        // horizontal
-        i32 x = roll(rnd, BOARD_W - 1);
-        i32 y = roll(rnd, BOARD_H - 2) + 1;
-        if (
-          !GET_TYPEXY(board, x, y) &&
-          !GET_TYPEXY(board, x + 1, y)
-        ) {
-          SET_TYPEXY(board, x, y, T_LV4A);
-          SET_TYPEXY(board, x + 1, y, T_LV4A);
+        case 1: // bishops
+          t = T_LV4B;
+          x1 = x2 = roll(rnd, BOARD_W - 2) + 1;
+          y1 = roll(rnd, BOARD_H - 1);
+          y2 = y1 + 1;
+          if (roll(rnd, 2)) { // forward slash
+            x1++;
+          } else { // back slash
+            x2++;
+          }
           break;
-        }
+        case 2: // knights
+          t = T_LV4C;
+          x1 = x2 = roll(rnd, BOARD_W - 4) + 2;
+          y1 = y2 = roll(rnd, BOARD_H - 4) + 2;
+          switch (roll(rnd, 8)) {
+            case 0: x2 -= 2; y2 += 1; break;
+            case 1: x2 -= 2; y2 -= 1; break;
+            case 2: x2 -= 1; y2 += 2; break;
+            case 3: x2 -= 1; y2 -= 2; break;
+            case 4: x2 += 1; y2 += 2; break;
+            case 5: x2 += 1; y2 -= 2; break;
+            case 6: x2 += 2; y2 += 1; break;
+            case 7: x2 += 2; y2 -= 1; break;
+          }
+          break;
+      }
+      if (
+        x1 >= 0 && x1 < BOARD_W &&
+        y1 >= 0 && y1 < BOARD_H &&
+        x2 >= 0 && x2 < BOARD_W &&
+        y2 >= 0 && y2 < BOARD_H &&
+        IS_EMPTYXY(board, x1, y1) &&
+        IS_EMPTYXY(board, x2, y2)
+      ) {
+        SET_TYPEXY(board, x1, y1, t);
+        SET_TYPEXY(board, x2, y2, t);
+        break;
       }
       if (attempt > 100) goto restart;
     }
@@ -402,7 +423,7 @@ restart:
       i32 x = roll(rnd, BOARD_W);
       i32 y = roll(rnd, BOARD_H);
       if (
-        !GET_TYPEXY(board, x, y) &&
+        IS_EMPTYXY(board, x, y) &&
         count_tiles(board, x - 1, y - 1, 1, istile_mine) < 4 &&
         count_tiles(board, x    , y - 1, 1, istile_mine) < 4 &&
         count_tiles(board, x + 1, y - 1, 1, istile_mine) < 4 &&
@@ -424,7 +445,7 @@ restart:
       i32 x = roll(rnd, BOARD_W);
       i32 y = roll(rnd, BOARD_H);
       if (
-        !GET_TYPEXY(board, x, y) &&
+        IS_EMPTYXY(board, x, y) &&
         count_tiles(board, x, y, 2, istile_chest) < 2
       ) {
         if (i < 6) {
@@ -437,7 +458,7 @@ restart:
             x2 >= BOARD_W ||
             y2 < 0 ||
             y2 >= BOARD_H ||
-            GET_TYPEXY(board, x2, y2) ||
+            !IS_EMPTYXY(board, x2, y2) ||
             count_tiles(board, x, y, 1, istile_lv6)
           ) {
             // can't place here :-(
@@ -458,11 +479,13 @@ restart:
   for (i32 attempt = 0; ; attempt++) {
     // place the rest randomly
     place_random(board, rnd, T_LV5A, 8); // slime
-    place_random(board, rnd, T_LV5B, 1); // spider king
+    place_random(board, rnd, T_LV5B, 1); // spiderking
     place_random(board, rnd, T_LV5C, 2); // gazer
     place_random(board, rnd, T_LV1A, 12);
     place_random(board, rnd, T_LV2, 11);
-    place_random(board, rnd, T_LV3A, 9);
+    place_random(board, rnd, T_LV3A, 4);
+    place_random(board, rnd, T_LV3B, 2);
+    place_random(board, rnd, T_LV3C, 3);
     place_random(board, rnd, T_LV11, 1);
     // final placement is the starting location, which should reveal certain things
     i32 bx = -1;
@@ -471,7 +494,8 @@ restart:
     for (i32 y = 2; y < BOARD_H - 2; y++) {
       for (i32 x = 2; x < BOARD_W - 2; x++) {
         if (
-          // don't reveal spider king or anything higher
+          IS_EMPTY(board[x + y * BOARD_W]) &&
+          // don't reveal spiderking or higher
           count_tiles(board, x, y, -2, istile_lv5bplus) == 0 &&
           // exactly one wall
           count_tiles(board, x, y, -2, istile_wall) == 1 &&

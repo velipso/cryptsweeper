@@ -27,6 +27,10 @@
 #define S_HP_END       23
 #define S_EXP_START    24
 #define S_EXP_END      53
+#define S_KING1_BODY   124
+#define S_KING2_BODY   125
+#define S_KING3_BODY   126
+#define S_KING4_BODY   127
 
 static u32 g_down;
 static u32 g_hit;
@@ -52,6 +56,17 @@ struct save_st savecopy SECTION_EWRAM;
 u8 *const saveaddr = (u8 *)0x0e000000;
 struct rnd_st g_rnd = { 1, 1 };
 static bool g_showing_levelup;
+static const struct {
+  const i32 t;
+  const u16 *const ani_alive;
+  const u16 *const ani_dead;
+} g_kinginfo[4] = {
+  { T_LV1B, ani_lv1b, ani_lv1b_dead },
+  { T_LV5B, ani_lv5b, ani_lv5b_dead },
+  { T_LV10, ani_lv10, ani_lv10_dead },
+  { T_LV13, ani_lv13, ani_lv13_dead }
+};
+static struct { i32 x, y; } g_kingxy[4];
 
 // map 0-10 -> 0-16
 static const u16 volume_map_fwd[] SECTION_ROM =
@@ -69,7 +84,6 @@ static void shake_screen() {
   g_shake_frame = 0;
 }
 static void SECTION_IWRAM_ARM irq_vblank() {
-  sys_copy_oam(g_oam);
   u32 inp = sys_input() ^ 0x3ff;
   g_hit = ~g_down & inp;
   g_down = inp;
@@ -84,11 +98,19 @@ static void SECTION_IWRAM_ARM irq_vblank() {
         amt += (g_rnd.seed & 3) + 1;
         if (g_shake & 1) amt = -amt;
       }
+      // shake kings
+      for (i32 king = 0; king < 4; king++) {
+        if (g_sprites[S_KING1_BODY + king].pc) {
+          g_sprites[S_KING1_BODY + king].origin.x = g_kingxy[king].x * 16 + 8 - amt;
+          ani_flushxy(S_KING1_BODY + king);
+        }
+      }
       sys_set_bgt3_scroll(8 + amt, 13);
       sys_set_bgt2_scroll(8 + amt, 13);
       sys_set_bgt1_scroll(8 + amt, 10);
     }
   }
+  sys_copy_oam(g_oam);
 }
 
 static u32 calculate_checksum(struct save_st *g) {
@@ -491,6 +513,7 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
 };
 
 static void load_level(i32 diff, u32 seed) {
+  sys_print("new game seed = %x", seed);
   game_new(game, diff, seed);
 
   struct rnd_st rnd;
@@ -593,8 +616,28 @@ static void load_scr_raw(const void *addr, u32 size) {
 
 static void tile_update(i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return;
-  u32 k = x + y * BOARD_W;
+  i32 k = x + y * BOARD_W;
   u8 t = game->board[k];
+
+  for (i32 king = 0; king < 4; king++) {
+    if (x == g_kingxy[king].x && y == g_kingxy[king].y) {
+      if (
+        GET_TYPE(t) != g_kinginfo[king].t ||
+        (!g_peek && !game->win && GET_STATUS(t) == S_HIDDEN)
+      ) {
+        g_sprites[S_KING1_BODY + king].pc = NULL;
+      } else {
+        if (GET_STATUS(t) == S_PRESSED) {
+          g_sprites[S_KING1_BODY + king].pc = g_kinginfo[king].ani_dead;
+        } else {
+          g_sprites[S_KING1_BODY + king].pc = g_kinginfo[king].ani_alive;
+        }
+        g_sprites[S_KING1_BODY + king].origin.x = g_kingxy[king].x * 16 + 8;
+        g_sprites[S_KING1_BODY + king].origin.y = g_kingxy[king].y * 16 + 3;
+      }
+    }
+  }
+
   i32 frame = IS_MONSTER(t) && GET_TYPE(t) != T_LV11 ? (rnd32(&g_rnd) & 1) : 0;
   switch (GET_STATUS(t)) {
     case S_HIDDEN:
@@ -634,7 +677,11 @@ static void tile_update(i32 x, i32 y) {
         place_number(x, y, 0, -3);
         place_minehint(x, y, 0);
       } else {
-        place_floor(x, y, 1);
+        if (game->win == 2 && GET_TYPE(t) == T_ITEM_EXIT) {
+          place_floor(x, y, 2);
+        } else {
+          place_floor(x, y, 1);
+        }
         place_answer(x, y, IS_ITEM(t) ? 0 : 2);
         place_number(x, y, 0, -3);
         place_minehint(x, y, 0);
@@ -713,6 +760,9 @@ static void draw_level();
 static void you_win() {
   cursor_hide();
   palette_fadetoblack();
+  for (i32 king = 0; king < 4; king++) {
+    g_sprites[S_KING1_BODY + king].pc = NULL;
+  }
   if (game->difficulty & D_ONLYMINES) {
     load_scr(scr_winmine_o);
   } else {
@@ -762,7 +812,7 @@ static void draw_level() {
   gfx_showbg1(true); // numbers/marks
   sys_set_bg_config(
     1, // background #
-    0, // priority
+    1, // priority
     0, // tile start
     0, // mosaic
     1, // 256 colors
@@ -773,7 +823,7 @@ static void draw_level() {
   gfx_showbg2(true); // board fg
   sys_set_bg_config(
     2, // background #
-    0, // priority
+    1, // priority
     0, // tile start
     0, // mosaic
     1, // 256 colors
@@ -784,7 +834,7 @@ static void draw_level() {
   gfx_showbg3(true); // board bg
   sys_set_bg_config(
     3, // background #
-    0, // priority
+    1, // priority
     0, // tile start
     0, // mosaic
     1, // 256 colors
@@ -807,6 +857,9 @@ static void draw_level() {
   sys_set_bgt3_scroll(8, 13);
   sys_set_bgt2_scroll(8, 13);
   sys_set_bgt1_scroll(8, 10);
+  for (i32 king = 0; king < 4; king++) {
+    g_kingxy[king].x = -1;
+  }
   for (i32 y = -1; y <= BOARD_H; y++) {
     for (i32 x = -1; x <= BOARD_W; x++) {
       if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) {
@@ -817,6 +870,12 @@ static void draw_level() {
         sys_set_map(0x1f, offset + 64, 1);
         sys_set_map(0x1f, offset + 66, 1);
       } else {
+        for (i32 king = 0; king < 4; king++) {
+          if (GET_TYPEXY(game->board, x, y) == g_kinginfo[king].t) {
+            g_kingxy[king].x = x;
+            g_kingxy[king].y = y;
+          }
+        }
         tile_update(x, y);
       }
     }
@@ -1345,7 +1404,15 @@ start_game:
   if (load < 0) {
     memcpy8(&saveroot, &savecopy, sizeof(struct save_st));
   } else {
-    load_level(load, rnd32(&g_rnd));
+/*
+seed 0x4caebf75   lost 7 health   failed, 5 away
+seed 0xa1958b2d   lost 4 health   won
+seed 0x54e36f23   lost 1 health   won
+seed 0x66405d77   lost 1 health   won
+seed 0xdaf070e8   lost 5 health   won
+seed 0x85af9171   lost 5 health   failed, 1 away
+*/
+    load_level(load, 0x85af9171);//rnd32(&g_rnd));
   }
   g_showing_levelup = false;
   draw_level();
@@ -1391,7 +1458,7 @@ start_game:
           u8 y = (hint >> 8) & 0xff;
           u8 action = (hint >> 16) & 0xff;
           i8 note = (hint >> 24) & 0xff;
-          sys_print("hint: %x %x %x %x", x, y, action, note);
+          //sys_print("hint: %x %x %x %x", x, y, action, note);
           switch (action) {
             case 0: // click
               game_hover(game, handler, x, y);
@@ -1484,6 +1551,9 @@ start_game:
           // save+quit
           palette_fadetowhite();
           save_savecopy(false);
+          for (i32 king = 0; king < 4; king++) {
+            g_sprites[S_KING1_BODY + king].pc = NULL;
+          }
           goto start_title;
         }
       }

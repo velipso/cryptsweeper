@@ -40,12 +40,12 @@ void game_hover(struct game_st *game, game_handler_f handler, i32 x, i32 y) {
   game->sely = y;
   // hovering over lava?
   if (GET_TYPEXY(game->board, x, y) == T_LAVA) {
+    handler(game, EV_HOVER_LAVA, 0, 0);
     if (game->hp == 0) {
       you_died(game, handler);
     } else {
       game->hp--;
       handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
-      handler(game, EV_HOVER_LAVA, 0, 0);
     }
   }
 }
@@ -309,12 +309,9 @@ static i32 attack_monster_group(struct game_st *game, game_handler_f handler, i3
   // is this the last one?
   bool last = true;
   for (i32 i = 0; i < BOARD_SIZE && last; i++) {
-    last = GET_TYPE(game->board[i]) == type;
+    last = GET_TYPE(game->board[i]) != type;
   }
-  if (last) {
-    SET_TYPE(game->board[k], T_EMPTY);
-  } else {
-  }
+  SET_TYPE(game->board[k], last ? it1 : it0);
   return 0;
 }
 
@@ -900,7 +897,7 @@ next_dy:
   return evidence;
 }
 
-static i32 slimeking_evidence(struct game_st *game, i32 x, i32 y) { // -1 = impossible
+static i32 slimeking_evidence(struct game_st *game, i32 x, i32 y, bool phase1) { // -1 = impossible
   i32 evidence = 0;
   for (i32 dy = -2; dy <= 2; dy++) {
     i32 by = dy + y;
@@ -925,7 +922,7 @@ static i32 slimeking_evidence(struct game_st *game, i32 x, i32 y) { // -1 = impo
         i32 th = known_threat_at(game, bx, by);
         if (th == 8) {
           evidence++;
-        } else if (th >= 0) {
+        } else if ((phase1 && th == 0) || th > 0) {
           return -1;
         }
       } else {
@@ -985,7 +982,7 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
       }
       if (
         // always collect items (except healing), exp, and chests ASAP
-        ((s == S_VISIBLE || s == S_PRESSED) && (
+        (s == S_VISIBLE || s == S_PRESSED) && (
           t == T_ITEM_EYE ||
           t == T_ITEM_EYE2 ||
           t == T_ITEM_SHOW1 ||
@@ -1001,8 +998,7 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
           t == T_ITEM_EXIT ||
           IS_CHEST(t) ||
           (game->hp >= 13 && t == T_LV13) // finish the game ASAP!
-        )) ||
-        (s == S_PRESSED && IS_MONSTER(t))
+        )
       ) {
         if (t == T_ITEM_EXIT) {
           // about to win, print stats
@@ -1046,15 +1042,17 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
     }
   }
 
-  { // find and kill slimeking
+  { // find and kill the slimeking
     if (game->slimeking.size == 0) {
       // phase 1 - find potential locations
-      #define CHECK(sx, sy)  do {                          \
-          if (slimeking_evidence(game, sx, sy) > 0) {      \
-            game->slimeking.x[game->slimeking.size] = sx;  \
-            game->slimeking.y[game->slimeking.size] = sy;  \
-            game->slimeking.size++;                        \
-          }                                                \
+      #define CHECK(sx, sy)  do {                            \
+          if (slimeking_evidence(game, sx, sy, true) > 0) {  \
+            game->slimeking.x[game->slimeking.size] = sx;    \
+            game->slimeking.y[game->slimeking.size] = sy;    \
+            game->slimeking.size++;                          \
+            handler(game, EV_DEBUGLOG, 0x20, sx);            \
+            handler(game, EV_DEBUGLOG, 0x21, sy);            \
+          }                                                  \
         } while (0)
       for (i32 y = 1; y < BOARD_H - 1; y++) {
         CHECK(0, y);
@@ -1069,8 +1067,10 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
     if (game->slimeking.size > 1) {
       // phase 2 - eliminate until only one left
       for (i32 i = 0; i < game->slimeking.size; i++) {
-        if (slimeking_evidence(game, game->slimeking.x[i], game->slimeking.y[i]) < 0) {
+        if (slimeking_evidence(game, game->slimeking.x[i], game->slimeking.y[i], false) < 0) {
           // this one is eliminated
+          handler(game, EV_DEBUGLOG, 0x22, game->slimeking.x[i]);
+          handler(game, EV_DEBUGLOG, 0x23, game->slimeking.y[i]);
           game->slimeking.size--;
           for (i32 j = i; j < game->slimeking.size; j++) {
             game->slimeking.x[j] = game->slimeking.x[j + 1];
@@ -1082,11 +1082,14 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
     }
     if (game->slimeking.size == 1) {
       // phase 3 - kill it! or note it if no HP
+      i32 x = game->slimeking.x[0];
+      i32 y = game->slimeking.y[0];
       if (game->hp >= 1) {
         game->slimeking.size = -1; // all done!
-        return H_CLICK(game->slimeking.x[0], game->slimeking.y[0]);
+        return H_CLICK(x, y);
+      } else if (game->notes[x + y * BOARD_W] == -3) {
+        return H_NOTE(x, y, 1);
       }
-      return H_NOTE(game->slimeking.x[0], game->slimeking.y[0], 1);
     }
   }
 
@@ -1118,6 +1121,18 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
             }
           }
         }
+      }
+    }
+  }
+
+  // collect free exp (after learning from it, above)
+  for (i32 y = 0, k = 0; y < BOARD_H; y++) {
+    for (i32 x = 0; x < BOARD_W; x++, k++) {
+      if (
+        GET_STATUS(game->board[k]) == S_PRESSED &&
+        IS_MONSTER(game->board[k])
+      ) {
+        return H_CLICK(x, y);
       }
     }
   }
@@ -1157,9 +1172,13 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
           // we *could* kill this monster... should we?
           // see how many cells we would get information about
           hidden = count_hidden(game, x, y);
-          score += gazer;
+          score += gazer > 0 ? gazer : 0;
           if (threat == 1 || threat == 2) { // try to save lv1-2 for later
             score += threat;
+          } else if (threat == 3) { // favor killing 3's for delayed exp
+            score += 15;
+          } else if (threat == 10) {
+            score += 34; // favor lv10 over lv11, because it exposes mines
           } else {
             score += threat * 3; // favor higher level monsters
           }

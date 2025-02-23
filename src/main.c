@@ -1404,15 +1404,7 @@ start_game:
   if (load < 0) {
     memcpy8(&saveroot, &savecopy, sizeof(struct save_st));
   } else {
-/*
-seed 0x4caebf75   lost 7 health   failed, 5 away
-seed 0xa1958b2d   lost 4 health   won
-seed 0x54e36f23   lost 1 health   won
-seed 0x66405d77   lost 1 health   won
-seed 0xdaf070e8   lost 5 health   won
-seed 0x85af9171   lost 5 health   failed, 1 away
-*/
-    load_level(load, 0x85af9171);//rnd32(&g_rnd));
+    load_level(load, rnd32(&g_rnd));
   }
   g_showing_levelup = false;
   draw_level();

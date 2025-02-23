@@ -523,3 +523,41 @@ restart:
     copy_board(board, copy);
   }
 }
+
+static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
+  // do nothing?
+}
+
+void generate_levels(u8 *levels, i32 count, struct rnd_st *rnd) {
+  for (i32 group = 0; group < count; group++) {
+    if ((group % 100) == 99 || group == count - 1) {
+      printf("generating levels %d/%d\n", group + 1, count);
+    }
+    i32 gk = 128 * 6 * group;
+    for (int diff = 0; diff < 5; diff++) {
+      generate_normal(&levels[gk + 128 * diff], diff, rnd);
+      if (group < 2) {
+        printf("group %d difficulty %d\n", group, diff);
+        print_board(&levels[gk + 128 * diff]);
+      }
+    }
+    for (int diff = 0; diff < 5; diff++) {
+      u8 board[BOARD_SIZE];
+      generate_onlymines(board, diff, rnd);
+      // embed mine games as bits on the 6th board for each difficulty
+      for (int i = 0; i < BOARD_SIZE; i++) {
+        levels[gk + 128 * 5 + i] |= board[i] ? (1 << diff) : 0;
+      }
+    }
+  }
+
+  // run stats on the levels
+  struct game_st game;
+  for (i32 group = 0; group < count; group++) {
+    for (i32 diff = 0; diff < 5; diff++) {
+      game_new(&game, diff, rnd32(rnd), &levels[128 * 6 * group + diff * 128]);
+      // TODO: simulate game until giving up or won, collect stats, print them
+      //u32 game_hint(struct game_st *game, game_handler_f handler)
+    }
+  }
+}

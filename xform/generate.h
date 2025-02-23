@@ -18,3 +18,4 @@ typedef int32_t  i32;
 void print_board(const u8 *board);
 void generate_onlymines(u8 *board, i32 diff, struct rnd_st *rnd);
 void generate_normal(u8 *board, i32 diff, struct rnd_st *rnd);
+void generate_levels(u8 *levels, i32 count, struct rnd_st *rnd);

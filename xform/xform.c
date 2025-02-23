@@ -342,28 +342,10 @@ static int levels(int count, int seed, const char *output) {
   }
   struct rnd_st rnd;
   rnd_seed(&rnd, seed);
-  for (i32 group = 0; group < count; group++) {
-    if ((group % 100) == 99 || group == count - 1) {
-      printf("generating levels %d/%d\n", group + 1, count);
-    }
-    u8 levels[128 * 6] = {0};
-    for (int i = 0; i < 5; i++) {
-      generate_normal(&levels[128 * i], i, &rnd);
-      if (group < 2) {
-        printf("group %d difficulty %d\n", group, i);
-        print_board(&levels[128 * i]);
-      }
-    }
-    for (int i = 0; i < 5; i++) {
-      u8 board[BOARD_SIZE];
-      generate_onlymines(board, i, &rnd);
-      // embed mine games as bits on the 6th board for each difficulty
-      for (int j = 0; j < BOARD_SIZE; j++) {
-        levels[128 * 5 + j] |= board[j] ? (1 << i) : 0;
-      }
-    }
-    fwrite(levels, 128, 6, fp);
-  }
+  u8 *levels = calloc(count, 128 * 6);
+  generate_levels(levels, count, &rnd);
+  fwrite(levels, 128 * 6, count, fp);
+  free(levels);
   fclose4(fp);
   return 0;
 }

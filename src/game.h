@@ -140,7 +140,7 @@ enum game_event {
 
 typedef void (*game_handler_f)(struct game_st *game, enum game_event ev, i32 x, i32 y);
 
-void game_new(struct game_st *game, i32 difficulty, u32 seed);
+void game_new(struct game_st *game, i32 difficulty, u32 seed, const u8 *board);
 void game_hover(struct game_st *game, game_handler_f handler, i32 x, i32 y);
 bool game_click(struct game_st *game, game_handler_f handler);
 bool game_levelup(struct game_st *game, game_handler_f handler);

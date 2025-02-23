@@ -514,91 +514,13 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
 
 static void load_level(i32 diff, u32 seed) {
   sys_print("new game seed = %x", seed);
-  game_new(game, diff, seed);
-
-  struct rnd_st rnd;
-  rnd_seed(&rnd, seed);
   const u8 *levels = BINADDR(levels_bin);
-  u32 base = rnd32(&rnd) & 1023; // TODO: mask by number of level groups
+  u32 base = seed & 1023; // TODO: mask by number of level groups
   levels += base * 128 * 6;
-
-  game->selx = BOARD_CW;
-  game->sely = BOARD_CH;
   if (diff & D_ONLYMINES) {
-    // copy onlymines level based on difficulty
-    levels += 128 * 5;
-    diff &= ~D_ONLYMINES;
-    for (i32 i = 0; i < BOARD_SIZE; i++) {
-      game->notes[i] = -3;
-      game->board[i] = (levels[i] & (1 << diff)) ? T_MINE : T_EMPTY;
-    }
-    // find the best location for the start by looking for the most empty cells
-    i32 best_score = -1;
-    i32 same_score = 0;
-    for (i32 y = 0, i = 0; y < BOARD_H; y++) {
-      for (i32 x = 0; x < BOARD_W; x++, i++) {
-        if (IS_EMPTY(game->board[i])) {
-          i32 score = 0;
-          for (i32 dy = -1; dy <= 1; dy++) {
-            i32 by = dy + y;
-            if (by < 0 || by >= BOARD_H) continue;
-            for (i32 dx = -1; dx <= 1; dx++) {
-              i32 bx = dx + x;
-              if (bx < 0 || bx >= BOARD_W) continue;
-              score += IS_EMPTY(game->board[bx + by * BOARD_W]) ? 1 : 0;
-            }
-          }
-          if (score > best_score) {
-            best_score = score;
-            same_score = 1;
-            game->selx = x;
-            game->sely = y;
-          } else if (score == best_score && rnd_pick(&rnd, same_score)) {
-            same_score++;
-            game->selx = x;
-            game->sely = y;
-          }
-        }
-      }
-    }
+    game_new(game, diff, seed, levels + 128 * 5);
   } else {
-    // copy normal level based on difficulty
-    levels += 128 * diff;
-    for (i32 y = 0, i = 0; y < BOARD_H; y++) {
-      for (i32 x = 0; x < BOARD_W; x++, i++) {
-        game->notes[i] = -3;
-        game->board[i] = levels[i];
-        // start at the T_ITEM_EYE
-        if (GET_TYPE(game->board[i]) == T_ITEM_EYE) {
-          game->selx = x;
-          game->sely = y;
-        }
-      }
-    }
-    // swap some empty/lv1a/lv2 around for fun
-    for (i32 swap = 0; swap < 200; swap++) {
-      i32 ai = 0, ap = 0;
-      i32 bi = 0, bp = 0;
-      for (i32 i = 0; i < BOARD_SIZE; i++) {
-        i32 t = GET_TYPE(game->board[i]);
-        if (IS_EMPTY(t) || t == T_LV1A || t == T_LV2) {
-          if (roll(&rnd, 2)) {
-            // give `a` first crack at it
-            if (rnd_pick(&rnd, ap++)) ai = i;
-            else if (rnd_pick(&rnd, bp++)) bi = i;
-          } else {
-            // give `b` first crack at it
-            if (rnd_pick(&rnd, bp++)) bi = i;
-            else if (rnd_pick(&rnd, ap++)) ai = i;
-          }
-        }
-      }
-      if (ap > 0 && bp > 0) {
-        i32 temp = game->board[ai];
-        game->board[ai] = game->board[bi];
-        game->board[bi] = temp;
-      }
-    }
+    game_new(game, diff, seed, levels + 128 * diff);
   }
 }
 
@@ -859,6 +781,7 @@ static void draw_level() {
   sys_set_bgt1_scroll(8, 10);
   for (i32 king = 0; king < 4; king++) {
     g_kingxy[king].x = -1;
+    g_sprites[S_KING1_BODY + king].pc = NULL;
   }
   for (i32 y = -1; y <= BOARD_H; y++) {
     for (i32 x = -1; x <= BOARD_W; x++) {

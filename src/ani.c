@@ -72,7 +72,15 @@ void ani_step(u32 i) {
                     oam[2] = 0;
                     s->pc = NULL;
                     return;
-                  case 0x3: // reserved
+                  case 0x3: // soft reset (leave dx/dy/gravity alone)
+                    oam[0] = 0x2000 | 160; // 256 color
+                    oam[1] = 240;
+                    oam[2] = 0;
+                    s->waitcount = 0;
+                    s->loopcount = 0;
+                    s->offset.x = 0;
+                    s->offset.y = 0;
+                    break;
                   case 0x4: // reserved
                   case 0x5: // reserved
                   case 0x6: // reserved

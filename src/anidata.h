@@ -83,3 +83,6 @@ extern const u16 ani_lv10[];
 extern const u16 ani_lv10_dead[];
 extern const u16 ani_lv13[];
 extern const u16 ani_lv13_dead[];
+
+extern const u16 ani_gray1[];
+extern const u16 ani_gray2[];

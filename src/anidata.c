@@ -42,6 +42,7 @@
 #define RESET()        0x0000
 #define STOP()         0x0001
 #define DESTROY()      0x0002
+#define SOFTRESET()    0x0003
 #define SIZE(v)        (0x0010 | U4(v))
 #define SIZE_8x8()     SIZE(0)
 #define SIZE_16x16()   SIZE(1)
@@ -665,4 +666,21 @@ const u16 ani_lv13_dead[] = {
   X(-8),
   Y(-8),
   STOP()
+};
+
+const u16 ani_gray1[] = {
+  SOFTRESET(),
+  SIZE_8x8(),
+  TILEXY(104, 0),
+  PRIORITY(1),
+  WAIT(25),
+  DESTROY()
+};
+const u16 ani_gray2[] = {
+  SOFTRESET(),
+  SIZE_8x8(),
+  TILEXY(112, 0),
+  PRIORITY(1),
+  WAIT(25),
+  DESTROY()
 };

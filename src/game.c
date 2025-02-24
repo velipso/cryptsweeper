@@ -221,6 +221,9 @@ bool game_click(struct game_st *game, game_handler_f handler) {
         // clicking a hidden mimic, so just make it visible, like a chest
         SET_STATUS(game->board[k], S_VISIBLE);
       } else {
+        if (game->board[k] == T_EMPTY) {
+          handler(game, EV_PRESS_EMPTY, game->selx, game->sely);
+        }
         SET_STATUS(game->board[k], S_PRESSED);
         result = tile_info(game, handler, game->board[k], TI_ATTACK) == 0;
       }
@@ -411,6 +414,9 @@ static void reveal(struct game_st *game, game_handler_f handler, i32 x, i32 y) {
       IS_ITEM(game->board[k]) ||
       IS_CHEST(game->board[k])
     ) {
+      if (game->board[k] == T_EMPTY) {
+        handler(game, EV_PRESS_EMPTY, x, y);
+      }
       SET_STATUS(game->board[k], S_PRESSED);
     } else {
       SET_STATUS(game->board[k], S_VISIBLE);

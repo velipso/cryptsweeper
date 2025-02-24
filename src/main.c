@@ -27,6 +27,8 @@
 #define S_HP_END       24
 #define S_EXP_START    25
 #define S_EXP_END      54
+#define S_PART_START   55
+#define S_PART_END     123
 #define S_KING1_BODY   124
 #define S_KING2_BODY   125
 #define S_KING3_BODY   126
@@ -38,6 +40,7 @@ static i32 g_cursor_x;
 static i32 g_cursor_y;
 static i32 g_statsel_x;
 static i32 g_statsel_y;
+static i32 g_next_particle = S_PART_START;
 static bool g_peek = false;
 
 struct save_st {
@@ -162,6 +165,36 @@ static u32 dig99(i32 num) {
     num < 90 ? 8 : 9;
   u32 d2 = num - d1 * 10;
   return (d1 << 4) | d2;
+}
+
+static void place_particle(i32 x, i32 y, i32 dx, i32 dy, i32 ddy, const u16 *spr) {
+  i32 i = g_next_particle;
+  g_next_particle++;
+  if (g_next_particle > S_PART_END) {
+    g_next_particle = S_PART_START;
+  }
+  g_sprites[i].pc = spr;
+  g_sprites[i].origin.x = x;
+  g_sprites[i].origin.y = y;
+  g_sprites[i].offset.dx = dx;
+  g_sprites[i].offset.dy = dy;
+  g_sprites[i].gravity = ddy;
+}
+
+static void place_particles_press(i32 x, i32 y) {
+  x = x * 16 + 8;
+  y = y * 16 + 3;
+  for (i32 i = 0; i < 15; i++) {
+    i32 dx = roll(&g_rnd, 16);
+    place_particle(
+      x + dx,
+      y + roll(&g_rnd, 16),
+      (dx < 8 ? -1 : 1) * (roll(&g_rnd, 0x0040) + 0x0020),
+      -0x0080,
+      0x0008,
+      roll(&g_rnd, 2) ? ani_gray1 : ani_gray2
+    );
+  }
 }
 
 // -3 = blank
@@ -711,6 +744,7 @@ static void you_win() {
 
 static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
   switch (ev) {
+    case EV_PRESS_EMPTY: place_particles_press(x, y); break;
     case EV_TILE_UPDATE: tile_update(x, y); break;
     case EV_HP_UPDATE:   hp_update(x, y);   break;
     case EV_EXP_UPDATE:  exp_update(x, y);  break;
@@ -1215,7 +1249,7 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
   palette_fadefromwhite();
 
   const i32 MENU_Y = 120;
-  const i32 MENU_X = 86;
+  const i32 MENU_X = 92;
 
   // cursor
   g_sprites[S_TITLE_START + 0].pc = ani_arrowr;

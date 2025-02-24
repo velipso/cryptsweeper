@@ -130,6 +130,7 @@ enum game_type {
 #define IS_ITEMXY(b, x, y)        IS_ITEM((b)[(x) + (y) * BOARD_W])
 
 enum game_event {
+  EV_PRESS_EMPTY, // (x, y) tile location where pressing empty
   EV_TILE_UPDATE, // (x, y) tile location
   EV_HP_UPDATE,   // (hp, max_hp)
   EV_EXP_UPDATE,  // (exp, max_exp)

@@ -24,9 +24,9 @@
 #define S_CURSOR3      4
 #define S_CURSOR4      5
 #define S_HP_START     6
-#define S_HP_END       23
-#define S_EXP_START    24
-#define S_EXP_END      53
+#define S_HP_END       24
+#define S_EXP_START    25
+#define S_EXP_END      54
 #define S_KING1_BODY   124
 #define S_KING2_BODY   125
 #define S_KING3_BODY   126
@@ -513,10 +513,10 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
 };
 
 static void load_level(i32 diff, u32 seed) {
-  sys_print("new game seed = %x", seed);
+  u32 group = seed & (GENERATE_SIZE - 1);
+  sys_print("new game seed: %x, group: %x, diff: %x", seed, group, diff);
   const u8 *levels = BINADDR(levels_bin);
-  u32 base = seed & 1023; // TODO: mask by number of level groups
-  levels += base * 128 * 6;
+  levels += group * 128 * 6;
   if (diff & D_ONLYMINES) {
     game_new(game, diff, seed, levels + 128 * 5);
   } else {
@@ -627,35 +627,40 @@ static void tile_update(i32 x, i32 y) {
 static void hp_update(i32 cur, i32 max) {
   const i32 hp_x = 37;
   const i32 hp_y = 149;
+  #define HP_SPRITE  hp_i >= max ? NULL : hp_i < cur ? ani_hpfull : ani_hpempty
   if (cur <= 7) {
     // put empty in the background
     i32 hp_i = 6;
     for (i32 i = 0; i < 7; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = hp_i < max ? hp_i < cur ? ani_hpfull : ani_hpempty : NULL;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE;
       g_sprites[S_HP_START + i].origin.x = hp_x + (6 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y + 2;
     }
     hp_i = 12;
     for (i32 i = 7; i < 13; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = hp_i < max ? ani_hpempty : NULL;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE;
       g_sprites[S_HP_START + i].origin.x = hp_x + 4 + (12 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y;
     }
   } else {
     i32 hp_i = 12;
     for (i32 i = 0; i < 6; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = hp_i < max ? hp_i < cur ? ani_hpfull : ani_hpempty : NULL;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE;
       g_sprites[S_HP_START + i].origin.x = hp_x + 4 + (5 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y + 2;
     }
     for (i32 i = 6; i < 13; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = hp_i < max ? hp_i < cur ? ani_hpfull : ani_hpempty : NULL;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE;
       g_sprites[S_HP_START + i].origin.x = hp_x + (12 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y;
     }
   }
-  next_statdig_spr = S_HP_START + 13;
+  g_sprites[S_HP_START + 13].pc = next_level_hp_increases(game) ? ani_hphalf : NULL;
+  g_sprites[S_HP_START + 13].origin.x = hp_x + (max > 7 ? 7 : max) * 8;
+  g_sprites[S_HP_START + 13].origin.y = hp_y + 2;
+  next_statdig_spr = S_HP_START + 14;
   place_statnum(cur, max, hp_x, ani_hpnum, S_HP_END);
+  #undef HP_SPRITE
 }
 
 static void exp_update(i32 cur, i32 max) {
@@ -1368,7 +1373,7 @@ start_game:
           // let the computer play
           hint_cooldown = hint_cooldown_max;
           if (hint_cooldown_max > 0) hint_cooldown_max--;
-          u32 hint = game_hint(game, handler);
+          i32 hint = game_hint(game, handler, -1);
           u8 x = hint & 0xff;
           u8 y = (hint >> 8) & 0xff;
           u8 action = (hint >> 16) & 0xff;

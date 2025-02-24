@@ -27,8 +27,11 @@ typedef int32_t  i32;
 #define BOARD_CH    (BOARD_H >> 1)
 #define BOARD_SIZE  (BOARD_W * BOARD_H)
 
+#define GENERATE_SIZE  128
+
 struct game_st {
   struct rnd_st rnd;
+  u32 totalexp;
   i8 selx;
   i8 sely;
   u8 difficulty;
@@ -147,7 +150,8 @@ bool game_levelup(struct game_st *game, game_handler_f handler);
 void game_note(struct game_st *game, game_handler_f handler, i8 note);
 i32 game_tileicon(u32 type);
 i32 max_hp(struct game_st *game);
+bool next_level_hp_increases(struct game_st *game);
 i32 max_exp(struct game_st *game);
 i32 count_threat(const u8 *board, i32 x, i32 y);
-u32 game_hint(struct game_st *game, game_handler_f handler);
-// byte 0: x, byte 1: y, byte 2: action (click, note, levelup), byte 3: note value
+i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge);
+// byte 0: x, byte 1: y, byte 2: action (click, note, levelup, giveup), byte 3: note value

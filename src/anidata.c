@@ -216,6 +216,12 @@ const u16 ani_hpempty[] = {
   TILEXY(8, 16),
   STOP()
 };
+const u16 ani_hphalf[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(96, 32),
+  STOP()
+};
 const u16 ani_hp0[] = {
   RESET(),
   SIZE_8x16(),

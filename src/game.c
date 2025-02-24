@@ -26,6 +26,7 @@ void game_new(struct game_st *game, i32 difficulty, u32 seed, const u8 *board) {
   rnd_seed(&game->rnd, seed);
   game->level = 0;
   game->hp = 0;
+  game->totalexp = 0;
   game->exp = 0;
   game->difficulty = difficulty;
   game->win = 0;
@@ -85,7 +86,7 @@ void game_new(struct game_st *game, i32 difficulty, u32 seed, const u8 *board) {
       }
     }
     // swap some empty/lv1a/lv2 around for fun
-    for (i32 swap = 0; swap < 200; swap++) {
+    for (i32 swap = 0; swap < 300; swap++) {
       i32 ai = 0, ap = 0;
       i32 bi = 0, bp = 0;
       for (i32 i = 0; i < BOARD_SIZE; i++) {
@@ -263,6 +264,13 @@ i32 max_hp(struct game_st *game) {
   return 13;
 }
 
+bool next_level_hp_increases(struct game_st *game) {
+  game->level++;
+  i32 m = max_hp(game);
+  game->level--;
+  return max_hp(game) + 1 == m;
+}
+
 i32 max_exp(struct game_st *game) {
   static const i32 table[] = {4, 5, 7, 9, 9, 10, 12, 12, 12, 15, 18, 21, 21, 25};
   if (game->level < 14) {
@@ -338,6 +346,7 @@ static i32 you_died(struct game_st *game, game_handler_f handler) {
 }
 
 static void award_exp(struct game_st *game, game_handler_f handler, i32 amt) {
+  game->totalexp += amt;
   game->exp += amt;
   handler(game, EV_EXP_UPDATE, game->exp, max_exp(game));
 }
@@ -1034,7 +1043,15 @@ static i32 count_hidden(struct game_st *game, i32 x, i32 y) {
   return hidden;
 }
 
-u32 game_hint(struct game_st *game, game_handler_f handler) {
+i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
+  #define K_SAVELV1LV2()   (knowledge &   1)
+  #define K_ATTAKCLV3()    (knowledge &   2)
+  #define K_WALL()         (knowledge &   4)
+  #define K_ATTACKLV10()   (knowledge &   8)
+  #define K_LV9HEAL()      (knowledge &  16)
+  #define K_LV9MIRROR()    (knowledge &  32)
+  #define K_SLIMEKING()    (knowledge &  64)
+  #define K_GAZER()        (knowledge & 128)
   #define H_CLICK(x, y)    (0x00000000 | (x) | ((y) << 8))
   #define H_NOTE(x, y, n)  (0x00010000 | (x) | ((y) << 8) | (((u8)n) << 24))
   #define H_LEVELUP()      0x00020000
@@ -1119,7 +1136,7 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
     }
   }
 
-  { // find and kill the slimeking
+  if (K_SLIMEKING()) { // find and kill the slimeking
     if (game->slimeking.size == 0) {
       // phase 1 - find potential locations
       #define CHECK(sx, sy)  do {                            \
@@ -1170,19 +1187,19 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
     }
   }
 
-  { // mirror lv9's and kill them if we can
+  if (K_LV9HEAL() || K_LV9MIRROR()) { // mirror lv9's and kill them if we can
     for (i32 y = 0, k = 0; y < BOARD_H; y++) {
       for (i32 x = 0; x < BOARD_W; x++, k++) {
         if (known_threat_at(game, x, y) == 9) {
           // find mirror
           i32 mx = BOARD_W - x - 1;
-          if (known_threat_at(game, mx, y) < 0) {
+          if (K_LV9MIRROR() && known_threat_at(game, mx, y) < 0) {
             return H_NOTE(mx, y, 9);
-          } else {
+          } else if (K_LV9HEAL()) {
             // we know about both lv9's, so see if we can kill one
             if (game->hp >= 9) {
               bool s1 = GET_STATUSXY(game->board, x, y) == S_HIDDEN;
-              bool s2 = GET_STATUSXY(game->board, mx, y) == S_HIDDEN;
+              bool s2 = GET_STATUSXY(game->board, mx, y) == S_HIDDEN && K_LV9MIRROR();
               if (s1 && s2) {
                 // could kill either, favor the one with most hidden's
                 if (count_hidden(game, x, y) > count_hidden(game, mx, y)) {
@@ -1237,7 +1254,7 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
             }
           }
         }
-        i32 gazer = threat >= 5 ? gazer_evidence(game, x, y) : -1;
+        i32 gazer = K_GAZER() && threat >= 5 ? gazer_evidence(game, x, y) : -1;
         i32 hidden = 0;
 
         if (threat == 0) {
@@ -1249,19 +1266,22 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
           // we *could* kill this monster... should we?
           // see how many cells we would get information about
           hidden = count_hidden(game, x, y);
-          score += gazer > 0 ? gazer : 0;
-          if (threat == 1 || threat == 2) { // try to save lv1-2 for later
-            score += threat;
-          } else if (threat == 3) { // favor killing 3's for delayed exp
-            score += 15;
-          } else if (threat == 10) {
-            score += 34; // favor lv10 over lv11, because it exposes mines
+          const i32 thrm = 6; // tuned via testing *shrug*
+          const i32 gazm = 3; // tuned via testing *shrug*
+          const i32 hidm = 2; // tuned via testing *shrug*
+          score += gazer > 0 ? gazer * gazm : 0;
+          if (K_SAVELV1LV2() && (threat == 1 || threat == 2)) {
+            score += threat * thrm; // avoid killing 1-2's since they're most useful
+          } else if (K_ATTAKCLV3() && threat == 3) {
+            score += 7 * thrm; // favor killing 3's for delayed exp
+          } else if (K_ATTACKLV10() && threat == 10) {
+            score += 14 * thrm; // favor lv10 over lv11, because it exposes mines
           } else {
-            score += threat * 3; // favor higher level monsters
+            score += (threat + 2) * thrm; // favor higher level monsters
           }
-          score += hidden * 4; // favor cells next to unknowns
+          score += hidden * hidm; // favor cells next to unknowns
         } else if (gazer > 0) {
-          // there is a chance this cell is a gazer
+          // there is a pretty good chance this cell is a gazer -- this *could* kill us!
           if (game->hp >= 5 && threat < 0x100 && gazer >= 4) score += gazer;
           else continue;
         } else {
@@ -1289,7 +1309,7 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
   }
 
   // not enough HP to make progress, so try and kill a wall
-  if (game->hp > 0) {
+  if (K_WALL() && game->hp > 0) {
     for (i32 y = 0, i = 0; y < BOARD_H; y++) {
       for (i32 x = 0; x < BOARD_W; x++, i++) {
         if (
@@ -1327,4 +1347,12 @@ u32 game_hint(struct game_st *game, game_handler_f handler) {
   #undef H_NOTE
   #undef H_LEVELUP
   #undef H_GIVEUP
+  #undef K_SAVELV1LV2
+  #undef K_ATTAKCLV3
+  #undef K_WALL
+  #undef K_ATTACKLV10
+  #undef K_LV9HEAL
+  #undef K_LV9MIRROR
+  #undef K_SLIMEKING
+  #undef K_GAZER
 }

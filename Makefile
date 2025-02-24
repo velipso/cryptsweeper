@@ -163,7 +163,7 @@ $(TGT_DATA)/popups.o: $(DATA)/popups.png $(TGT_DATA)/palette.bin $(XFORM)
 
 $(TGT_DATA)/levels.o: $(XFORM)
 	$(MKDIR) -p $(@D)
-	$(XFORM) levels 1024 123 $(TGT_DATA)/levels.bin
+	$(XFORM) levels 123 $(TGT_DATA)/levels.bin
 	$(call objbinary,$(TGT_DATA)/levels.bin)
 
 $(TGT_SND)/snd_osc.o \

@@ -9,7 +9,7 @@
 #include <stdbool.h>
 #include "generate.h"
 
-void print_board(const u8 *board) {
+static void print_board(const u8 *board) {
   for (i32 y = 0, k = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++, k++) {
       i32 t = GET_TYPE(board[k]);
@@ -53,7 +53,7 @@ void print_board(const u8 *board) {
   printf("\e[0m\n");
 }
 
-void generate_onlymines(u8 *board, i32 diff, struct rnd_st *rnd) {
+static void generate_onlymines(u8 *board, i32 diff, struct rnd_st *rnd) {
   u8 minecount_table[] = { 16, 18, 20, 22, 26 };
   u8 minecount = minecount_table[diff];
   for (;;) {
@@ -246,7 +246,7 @@ static void copy_board(u8 *dst, const u8 *src) {
   }
 }
 
-void generate_normal(u8 *board, i32 diff, struct rnd_st *rnd) {
+static void generate_full(u8 *board, i32 diff, struct rnd_st *rnd) {
 restart:
   for (i32 i = 0; i < BOARD_SIZE; i++) {
     board[i] = 0;
@@ -359,11 +359,24 @@ restart:
     if (attempt > 100) goto restart;
   }
 
+  i32 lv4mask = 7;
+  switch (diff) {
+    case 0: lv4mask = 1; break; // only rooks
+    case 1: lv4mask = roll(rnd, 2) + 1; break; // only rooks, or only bishops
+    case 2: lv4mask = 3; break; // rooks+bishops
+    case 3: lv4mask = 7; break; // all types
+    case 4: lv4mask = roll(rnd, 2) + 5; break; // only rooks+knights, or only bishops+knights
+  }
   for (i32 i = 0; i < 4; i++) { // four pairs of lv4's in formation
     for (i32 attempt = 0; ; attempt++) {
       i32 x1, y1, x2, y2, t;
-      switch (roll(rnd, 3)) {
-        case 0: // rooks
+      i32 kind;
+      for (;;) {
+        kind = 1 << roll(rnd, 3);
+        if (lv4mask & kind) break;
+      }
+      switch (kind) {
+        case 1: // rooks
           t = T_LV4A;
           if (roll(rnd, 2)) { // vertical pair
             x1 = x2 = roll(rnd, BOARD_W - 2) + 1;
@@ -375,7 +388,7 @@ restart:
             y1 = y2 = roll(rnd, BOARD_H - 2) + 1;
           }
           break;
-        case 1: // bishops
+        case 2: // bishops
           t = T_LV4B;
           x1 = x2 = roll(rnd, BOARD_W - 2) + 1;
           y1 = roll(rnd, BOARD_H - 1);
@@ -386,7 +399,7 @@ restart:
             x2++;
           }
           break;
-        case 2: // knights
+        case 4: // knights
           t = T_LV4C;
           x1 = x2 = roll(rnd, BOARD_W - 4) + 2;
           y1 = y2 = roll(rnd, BOARD_H - 4) + 2;
@@ -478,15 +491,45 @@ restart:
   copy_board(copy, board);
   for (i32 attempt = 0; ; attempt++) {
     // place the rest randomly
-    place_random(board, rnd, T_LV5A, 8); // slime
-    place_random(board, rnd, T_LV5B, 1); // spiderking
-    place_random(board, rnd, T_LV5C, 2); // gazer
+    place_random(board, rnd, T_LV5B,  1); // spiderking
     place_random(board, rnd, T_LV1A, 12);
-    place_random(board, rnd, T_LV2, 11);
-    place_random(board, rnd, T_LV3A, 4);
-    place_random(board, rnd, T_LV3B, 2);
-    place_random(board, rnd, T_LV3C, 3);
-    place_random(board, rnd, T_LV11, 1);
+    place_random(board, rnd, T_LV2 , 11);
+    switch (diff) {
+      case 0:
+        // no gazers (slimes instead)
+        // no mimics (extra chest heal instead)
+        place_random(board, rnd, T_CHEST_HEAL, 1);
+        place_random(board, rnd, T_LV5A, 10); // slime
+        place_random(board, rnd, T_LV3A,  9); // immediate exp
+        break;
+      case 1:
+        // no mimics (slime instead)
+        place_random(board, rnd, T_LV5A, 10); // slime
+        place_random(board, rnd, T_LV5C,  1); // gazer
+        place_random(board, rnd, T_LV3A,  9); // immediate exp
+        break;
+      case 2:
+        place_random(board, rnd, T_LV11, 1); // mimic
+        place_random(board, rnd, T_LV5A, 8); // slime
+        place_random(board, rnd, T_LV5C, 2); // gazer
+        place_random(board, rnd, T_LV3A, 9); // immediate exp
+        break;
+      case 3:
+        place_random(board, rnd, T_LV11, 1); // mimic
+        place_random(board, rnd, T_LV5A, 8); // slime
+        place_random(board, rnd, T_LV5C, 2); // gazer
+        place_random(board, rnd, T_LV3A, 7); // immediate exp
+        place_random(board, rnd, T_LV3B, 2); // delayed exp (group 2)
+        break;
+      case 4:
+        place_random(board, rnd, T_LV11, 1); // mimic
+        place_random(board, rnd, T_LV5A, 8); // slime
+        place_random(board, rnd, T_LV5C, 2); // gazer
+        place_random(board, rnd, T_LV3A, 4); // immediate exp
+        place_random(board, rnd, T_LV3B, 2); // delayed exp (group 2)
+        place_random(board, rnd, T_LV3C, 3); // delayed exp (group 3)
+        break;
+    }
     // final placement is the starting location, which should reveal certain things
     i32 bx = -1;
     i32 by = -1;
@@ -528,15 +571,142 @@ static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
   // do nothing?
 }
 
+static i32 play_game(struct game_st *game, i32 diff, u32 seed, const u8 *board, i32 knowledge) {
+  game_new(game, diff, seed, board);
+  i32 iter = 0;
+  while (game->win == 0) {
+    iter++;
+    i32 hint = game_hint(game, handler, knowledge);
+    u8 x = hint & 0xff;
+    u8 y = (hint >> 8) & 0xff;
+    u8 action = (hint >> 16) & 0xff;
+    i8 note = (hint >> 24) & 0xff;
+    switch (action) {
+      case 0: // click
+        game_hover(game, handler, x, y);
+        if (!game_click(game, handler)) {
+          fprintf(stderr, "WARNING: bad click!\n");
+        }
+        break;
+      case 1: { // note
+        game_hover(game, handler, x, y);
+        game_note(game, handler, note);
+        break;
+      }
+      case 2: // levelup
+        if (!game_levelup(game, handler)) {
+          fprintf(stderr, "WARNING: bad levelup!\n");
+        }
+        break;
+      case 3: // give up
+        return iter;
+      default:
+        fprintf(stderr, "WARNING: bad hint: %08x\n", hint);
+        return iter;
+    }
+  }
+  return iter;
+}
+
+static bool acceptable_easy(const u8 *board) {
+  struct game_st game;
+  // play with no special knowledge
+  play_game(&game, 0, 1, board, 0);
+  // accept if you win!
+  return game.win == 2;
+}
+
+static bool acceptable_mild(const u8 *board) {
+  struct game_st game;
+  // play trying to save lv1+2
+  play_game(&game, 1, 1, board, 1);
+  // accept if you got far
+  return game.level >= 12;
+}
+
+static bool acceptable_normal(const u8 *board) {
+  struct game_st game1;
+  struct game_st game2;
+  // play one version with no knowledge
+  play_game(&game1, 2, 1, board, 0);
+  // play another with some basic strategy
+  play_game(&game2, 2, 1, board, 31);
+  // accept if your basic strategy was decisive
+  return game1.level <= 9 && game2.level >= 15;
+}
+
+static bool acceptable_hard(const u8 *board) {
+  struct game_st game1;
+  struct game_st game2;
+  // play one version with simple knowledge
+  play_game(&game1, 3, 1, board, 7);
+  // play another with some moderate strategy
+  play_game(&game2, 3, 1, board, 63);
+  // accept if your moderate strategy helped to nearly win
+  return game1.level <= 8 && game2.level >= 13;
+}
+
+static bool acceptable_expert(const u8 *board) {
+  struct game_st game1;
+  struct game_st game2;
+  // play one version with simple knowledge
+  play_game(&game1, 4, 1, board, 7);
+  // play another with max strategy
+  play_game(&game2, 4, 1, board, -1);
+  // accept if your max strategy helped get to late game
+  return game1.level <= 5 && game2.level >= 10;
+}
+
+static bool acceptable_difficulty(const u8 *board, i32 diff) {
+  switch (diff) {
+    case 0:
+      return acceptable_easy(board);
+    case 1:
+      return
+        !acceptable_easy(board) &&
+        acceptable_mild(board);
+    case 2:
+      return
+        !acceptable_easy(board) &&
+        !acceptable_mild(board) &&
+        acceptable_normal(board);
+    case 3:
+      return
+        !acceptable_easy(board) &&
+        !acceptable_mild(board) &&
+        !acceptable_normal(board) &&
+        acceptable_hard(board);
+    case 4:
+      return
+        !acceptable_easy(board) &&
+        !acceptable_mild(board) &&
+        !acceptable_normal(board) &&
+        !acceptable_hard(board) &&
+        acceptable_expert(board);
+  }
+  return false;
+}
+
 void generate_levels(u8 *levels, i32 count, struct rnd_st *rnd) {
+  i32 fails[5] = {0};
   for (i32 group = 0; group < count; group++) {
-    if ((group % 100) == 99 || group == count - 1) {
-      printf("generating levels %d/%d\n", group + 1, count);
+    if ((group % 10) == 9 || group == count - 1) {
+      printf("generating levels %4d/%d; fails per difficulty:%3d,%3d,%3d,%4d,%3d\n",
+        group + 1, count,
+        fails[0], fails[1], fails[2], fails[3], fails[4]
+      );
+      for (i32 i = 0; i < 5; i++) fails[i] = 0;
     }
     i32 gk = 128 * 6 * group;
-    for (int diff = 0; diff < 5; diff++) {
-      generate_normal(&levels[gk + 128 * diff], diff, rnd);
+    for (i32 diff = 0; diff < 5; diff++) {
+      u8 *board = &levels[gk + 128 * diff];
+      for (;;) {
+        generate_full(board, diff, rnd);
+        if (acceptable_difficulty(board, diff)) break;
+        fails[diff]++;
+      }
       if (group < 2) {
+        // print some example games
         printf("group %d difficulty %d\n", group, diff);
         print_board(&levels[gk + 128 * diff]);
       }
@@ -548,16 +718,6 @@ void generate_levels(u8 *levels, i32 count, struct rnd_st *rnd) {
       for (int i = 0; i < BOARD_SIZE; i++) {
         levels[gk + 128 * 5 + i] |= board[i] ? (1 << diff) : 0;
       }
-    }
-  }
-
-  // run stats on the levels
-  struct game_st game;
-  for (i32 group = 0; group < count; group++) {
-    for (i32 diff = 0; diff < 5; diff++) {
-      game_new(&game, diff, rnd32(rnd), &levels[128 * 6 * group + diff * 128]);
-      // TODO: simulate game until giving up or won, collect stats, print them
-      //u32 game_hint(struct game_st *game, game_handler_f handler)
     }
   }
 }

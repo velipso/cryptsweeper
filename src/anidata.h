@@ -19,6 +19,7 @@ extern const u16 ani_cursor4_pause[];
 
 extern const u16 ani_hpfull[];
 extern const u16 ani_hpempty[];
+extern const u16 ani_hphalf[];
 extern const u16 ani_hp0[];
 extern const u16 ani_hp1[];
 extern const u16 ani_hp2[];

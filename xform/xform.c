@@ -52,8 +52,8 @@ static void print_usage() {
     "  copy8x8 <input.png> <palette.bin> <output.bin>\n"
     "    Outputs 8x8 tiles from 8x8 source image\n"
     "\n"
-    "  levels <count> <seed> <output.bin>\n"
-    "    Generate starter levels\n"
+    "  levels <seed> <output.bin>\n"
+    "    Generate levels\n"
   );
 }
 
@@ -334,7 +334,7 @@ static int addpalette(const char *input, u16 *palette, int *nextpal, int maxpal)
   return 0;
 }
 
-static int levels(int count, int seed, const char *output) {
+static int levels(int seed, const char *output) {
   FILE *fp = fopen(output, "wb");
   if (fp == NULL) {
     fprintf(stderr, "\nFailed to write: %s\n", output);
@@ -342,6 +342,7 @@ static int levels(int count, int seed, const char *output) {
   }
   struct rnd_st rnd;
   rnd_seed(&rnd, seed);
+  i32 count = GENERATE_SIZE;
   u8 *levels = calloc(count, 128 * 6);
   generate_levels(levels, count, &rnd);
   fwrite(levels, 128 * 6, count, fp);
@@ -421,12 +422,12 @@ int main(int argc, const char **argv) {
     }
     return copy8x8(argv[2], argv[3], argv[4]);
   } else if (strcmp(argv[1], "levels") == 0) {
-    if (argc != 5) {
+    if (argc != 4) {
       print_usage();
-      fprintf(stderr, "\nExpecting levels <count> <seed> <output.bin>\n");
+      fprintf(stderr, "\nExpecting levels <seed> <output.bin>\n");
       return 1;
     }
-    return levels(atoi(argv[2]), atoi(argv[3]), argv[4]);
+    return levels(atoi(argv[2]), argv[3]);
   } else if (strcmp(argv[1], "snd") == 0) {
     return snd_main(argc - 2, &argv[2]);
   } else {

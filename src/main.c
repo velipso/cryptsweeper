@@ -877,7 +877,7 @@ static void popup_hide(i32 height) {
 
 static i32 popup_delete() {
   popup_show(30, 72);
-  g_sprites[S_POPUPCUR].pc = ani_arrowr;
+  g_sprites[S_POPUPCUR].pc = ani_arrowr2;
   g_sprites[S_POPUPCUR].origin.x = 97;
   i32 menu = 0;
   for (;;) {
@@ -905,7 +905,7 @@ static i32 popup_delete() {
 
 static i32 popup_newgame() {
   popup_show(31, 40);
-  g_sprites[S_POPUPCUR].pc = ani_arrowr;
+  g_sprites[S_POPUPCUR].pc = ani_arrowr2;
   g_sprites[S_POPUPCUR].origin.x = 97;
   i32 difficulty = game->difficulty & D_DIFFICULTY;
   for (;;) {

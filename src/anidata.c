@@ -542,6 +542,17 @@ const u16 ani_arrowr[] = {
   JUMP(-4),
   STOP()
 };
+const u16 ani_arrowr2[] = {
+  RESET(),
+  SIZE_8x16(),
+  TILEXY(80, 176),
+  WAIT(10),
+  ADDX(1),
+  WAIT(10),
+  ADDX(-1),
+  JUMP(-4),
+  STOP()
+};
 
 const u16 ani_title_continue1[] = {
   RESET(),

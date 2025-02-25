@@ -21,5 +21,8 @@ BINFILE(popups_bin);
 BINFILE(scr_title_o);
 BINFILE(scr_winmine_o);
 BINFILE(scr_wingame_o);
+BINFILE(scr_how1_o);
+BINFILE(scr_how2_o);
+BINFILE(scr_how3_o);
 
 void gvmain();

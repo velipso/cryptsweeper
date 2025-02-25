@@ -54,3 +54,36 @@ tilesheet at every t
 2d x s   |
 2e x s   |
 2f x s  /
+
+Achievements
+============
+ 1. Story+How to Play+Credits - Sum up the monster levels, you can have zero hearts, kill vampire
+ 2. Items (Heart, Eye, Exp, Show Spiders, Show Slimes, Explode Mines, Books)
+ 3. 1A/2/3A - Low level monsters, randomly placed, save if possible
+ 4. 1B - Slimeking on edge
+ 5. 3B - Kill 2 to gain 6 exp (hard+)
+ 6. 3C - Kill 3 to gain 9 exp (expert)
+ 7. 4A - Rook (easy+)
+ 8. 4B - Bishop (mild+)
+ 9. 4C - Knight (hard+)
+10. 5A - Slime - placed randomly, kill slimeking to expose
+11. 5B - Spiderking reveals spiders
+12. 5C - Gazer (mild+)
+13. 6  - Near chests
+14. 7  - In a box
+15. 8  - Surrounding slimeking
+16. 9  - Mirrored with hearts
+17. 10 - Corner with mine explosion
+18. 11 - Mimic (normal+)
+19. 13 - Vampire (back story)
+20. Mine  - Hold L+R when selecting a difficulty to play alternate game
+21. Wall  - Spend 1/2/4/6 hearts for 0/1/3/5 exp
+22. Chest - Scattered, one eye, three exp5, rest hearts
+23. Lava  - Don't cursor over
+24. You beat easy
+25. You beat mild
+26. You beat normal
+27. You beat hard
+28. You beat expert
+29. You beat alternate game
+30. 100% - cheats

@@ -34,14 +34,46 @@
 #define S_KING3_BODY   126
 #define S_KING4_BODY   127
 
-static u32 g_down;
-static u32 g_hit;
-static i32 g_cursor_x;
-static i32 g_cursor_y;
-static i32 g_statsel_x;
-static i32 g_statsel_y;
-static i32 g_next_particle = S_PART_START;
-static bool g_peek = false;
+enum book_enum {
+  B_INTRO,
+  B_ITEMS,
+  B_LOWLEVEL,
+  B_LV1B,
+  B_LV3B,
+  B_LV3C,
+  B_LV4A,
+  B_LV4B,
+  B_LV4C,
+  B_LV5A,
+  B_LV5B,
+  B_LV5C,
+  B_LV6,
+  B_LV7,
+  B_LV8,
+  B_LV9,
+  B_LV10,
+  B_LV11,
+  B_LV13,
+  B_MINE,
+  B_WALL,
+  B_CHEST,
+  B_LAVA,
+  B_EASY,
+  B_MILD,
+  B_NORMAL,
+  B_HARD,
+  B_EXPERT,
+  B_ONLYMINES,
+  B_100
+};
+#define B__SIZE      (B_100 + 1)
+#define RESET_BOOKS  0
+
+enum book_info_action {
+  BI_DRAW,
+  BI_CHECK,
+  BI_CLICK
+};
 
 struct save_st {
   u32 checksum;
@@ -52,6 +84,16 @@ struct save_st {
   u8 reserved;
   struct game_st game;
 };
+
+static u32 g_down;
+static u32 g_hit;
+static i32 g_cursor_x;
+static i32 g_cursor_y;
+static i32 g_statsel_x;
+static i32 g_statsel_y;
+static i32 g_next_particle = S_PART_START;
+static bool g_peek = false;
+static bool g_cheat = true; // TODO: change to false on release
 
 struct save_st saveroot;
 static struct game_st *const game = &saveroot.game;
@@ -79,6 +121,11 @@ static const u16 volume_map_back[] SECTION_ROM =
   {0, 1, 2, 3, 3, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10};
 
 static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y);
+static void book_award(enum book_enum book, i32 return_mode);
+static void book_click(enum book_enum book, i32 return_mode);
+static i32 book_info(enum book_enum book, enum book_info_action action);
+static void palette_fadetoblack();
+static void palette_fadefromblack();
 
 static u32 g_shake = 0;
 static u32 g_shake_frame;
@@ -148,6 +195,15 @@ static void nextframe() {
   for (int i = 0; i < 128; i++)
     ani_step(i);
   sys_nextframe();
+}
+
+static void waitstart() {
+  i32 delay = 30;
+  for (;;) {
+    nextframe();
+    if (delay > 0) delay--;
+    else if ((g_hit & SYS_INPUT_ST) || (g_hit && SYS_INPUT_A)) break;
+  }
 }
 
 static u32 dig99(i32 num) {
@@ -557,17 +613,25 @@ static void load_level(i32 diff, u32 seed) {
   }
 }
 
-static void load_scr_raw(const void *addr, u32 size) {
+static void load_scr_raw(const void *addr, u32 size, bool showobj) {
   gfx_setmode(GFX_MODE_2I);
   gfx_showbg0(false);
   gfx_showbg1(false);
   sys_set_bgs2_scroll(0, 0);
   gfx_showbg2(true);
   gfx_showbg3(false);
-  gfx_showobj(true);
+  gfx_showobj(showobj);
   sys_copy_tiles(0, 0, addr, size);
 }
-#define load_scr(a) load_scr_raw(BINADDR(a), BINSIZE(a))
+#define load_scr(a) load_scr_raw(BINADDR(a), BINSIZE(a), true)
+
+static void book_scr_raw(const void *addr, u32 size) {
+  load_scr_raw(addr, size, false);
+  palette_fadefromblack();
+  waitstart();
+  palette_fadetoblack();
+}
+#define book_scr(a) book_scr_raw(BINADDR(a), BINSIZE(a))
 
 static void tile_update(i32 x, i32 y) {
   if (x < 0 || x >= BOARD_W || y < 0 || y >= BOARD_H) return;
@@ -657,6 +721,15 @@ static void tile_update(i32 x, i32 y) {
   }
 }
 
+static void set_peek(bool f) {
+  g_peek = f;
+  for (i32 y = 0; y < BOARD_H; y++) {
+    for (i32 x = 0; x < BOARD_W; x++) {
+      tile_update(x, y);
+    }
+  }
+}
+
 static void hp_update(i32 cur, i32 max) {
   const i32 hp_x = 37;
   const i32 hp_y = 149;
@@ -712,14 +785,14 @@ static void you_lose(i32 x, i32 y) {
   if (GET_TYPE(game->board[x + y * BOARD_W]) == T_MINE) {
     shake_screen();
   }
+  save_savecopy(false);
 }
 
-static void palette_fadetoblack();
-static void palette_fadefromblack();
 static void draw_level();
 static void you_win() {
   cursor_hide();
   palette_fadetoblack();
+  save_savecopy(false);
   for (i32 king = 0; king < 4; king++) {
     g_sprites[S_KING1_BODY + king].pc = NULL;
   }
@@ -730,16 +803,37 @@ static void you_win() {
     load_scr(scr_wingame_o);
   }
   palette_fadefromblack();
-  u32 delay = 30;
-  for (;;) {
-    nextframe();
-    if (delay > 0) delay--;
-    else if (g_hit) break;
-  }
+  waitstart();
   palette_fadetoblack();
   draw_level();
   palette_fadefromblack();
-  // TODO: achievements
+
+  i32 new_book = -1;
+  i32 avail_books = 0;
+  for (i32 b = 0; b < B__SIZE; b++) {
+    if (saveroot.books & (1 << b)) continue; // skips books we already have
+    i32 pts = book_info(b, BI_CHECK);
+    if (pts >= 999) {
+      // force this book
+      new_book = b;
+      avail_books = -1;
+      break;
+    }
+    for (; pts > 0; pts--) {
+      if (rnd_pick(&g_rnd, avail_books)) new_book = b;
+      avail_books++;
+    }
+  }
+  if (
+    (avail_books < 0 || roll(&g_rnd, 2)) && // 50% chance, unless forced
+    new_book >= 0
+  ) {
+    book_award(new_book, 2);
+    if (saveroot.books == (((1 << B__SIZE) - 1) & ~(1 << B_100))) {
+      // got 100%!
+      book_award(B_100, 2);
+    }
+  }
 }
 
 static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
@@ -757,7 +851,7 @@ static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
   }
 }
 
-static void draw_level() {
+static void set_game_gfx() {
   gfx_setmode(GFX_MODE_4T);
   gfx_showbg0(true); // UI/pause
   sys_set_bg_config(
@@ -804,6 +898,10 @@ static void draw_level() {
     SYS_BGT_SIZE_256X256
   );
   gfx_showobj(true);
+}
+
+static void draw_level() {
+  set_game_gfx();
   sys_copy_tiles(0, 0, BINADDR(tiles_bin), BINSIZE(tiles_bin));
   sys_copy_tiles(2, 0, BINADDR(ui_bin), BINSIZE(ui_bin));
 
@@ -862,25 +960,25 @@ static void draw_level() {
 }
 
 static void draw_books() {
-  for (i32 y = 0; y < 3; y++) {
-    for (i32 x = 0; x < 10; x++) {
-      u32 bit = 1 << (x + y * 10);
-      if (saveroot.books & bit) {
-        u32 offset = 450 + x * 6 + y * 192;
-        u32 t = x * 2 + (y + 3) * 64;
-        u32 color = 1; // 0, 1, 2; TODO: lookup book color
-        color *= 3;
-        u32 yb = y == 0 ? 87 : 119;
-        sys_set_map(0x1c, offset - 64, yb + color);
-        sys_set_map(0x1c, offset - 62, yb + 1 + color);
-        sys_set_map(0x1c, offset - 60, yb + 2 + color);
-        sys_set_map(0x1c, offset + 4, 153 + color);
-        sys_set_map(0x1c, offset + 68, 153 + 32 + color);
-        sys_set_map(0x1c, offset +  0, t);
-        sys_set_map(0x1c, offset +  2, t + 1);
-        sys_set_map(0x1c, offset + 64, t + 32);
-        sys_set_map(0x1c, offset + 66, t + 33);
-      }
+  for (i32 b = 0; b < B__SIZE; b++) {
+    if (saveroot.books & (1 << b)) {
+      i32 bi = book_info(b, BI_DRAW);
+      i32 x = bi & 0xf;
+      i32 y = (bi >> 4) & 0xf;
+      i32 color = (bi >> 8) & 0xf;
+      u32 offset = 450 + x * 6 + y * 192;
+      u32 t = x * 2 + (y + 3) * 64;
+      color *= 3;
+      u32 yb = y == 0 ? 87 : 119;
+      sys_set_map(0x1c, offset - 64, yb + color);
+      sys_set_map(0x1c, offset - 62, yb + 1 + color);
+      sys_set_map(0x1c, offset - 60, yb + 2 + color);
+      sys_set_map(0x1c, offset + 4, 153 + color);
+      sys_set_map(0x1c, offset + 68, 153 + 32 + color);
+      sys_set_map(0x1c, offset +  0, t);
+      sys_set_map(0x1c, offset +  2, t + 1);
+      sys_set_map(0x1c, offset + 64, t + 32);
+      sys_set_map(0x1c, offset + 66, t + 33);
     }
   }
 }
@@ -935,6 +1033,35 @@ static i32 popup_delete() {
   g_sprites[S_POPUPCUR].pc = NULL;
   popup_hide(72);
   return menu;
+}
+
+static void popup_cheat() {
+  popup_show(32, 72);
+  g_sprites[S_POPUPCUR].pc = ani_arrowr2;
+  g_sprites[S_POPUPCUR].origin.x = 97;
+  i32 menu = g_cheat ? 1 : 0;
+  for (;;) {
+    g_sprites[S_POPUPCUR].origin.y = 83 + menu * 9;
+    nextframe();
+    if (g_hit & SYS_INPUT_U) {
+      if (menu > 0) {
+        menu--;
+      }
+    } else if (g_hit & SYS_INPUT_D) {
+      if (menu < 1) {
+        menu++;
+      }
+    } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
+      break;
+    } else if (g_hit & SYS_INPUT_B) {
+      menu = 0;
+      break;
+    }
+  }
+  g_sprites[S_POPUPCUR].pc = NULL;
+  popup_hide(72);
+  g_cheat = menu == 1;
+  set_peek(g_cheat ? g_peek : false);
 }
 
 static i32 popup_newgame() {
@@ -1164,7 +1291,15 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
             break;
         }
       } else {
-        // TODO: click book
+        for (i32 b = 0; b < B__SIZE; b++) {
+          i32 bi = book_info(b, BI_DRAW);
+          i32 x = bi & 0xf;
+          i32 y = (bi >> 4) & 0xf;
+          if (g_statsel_x == x && g_statsel_y - 1 == y) {
+            book_click(b, 1);
+            break;
+          }
+        }
       }
     }
   }
@@ -1238,10 +1373,9 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
   load_savecopy();
   u32 cs = calculate_checksum(&savecopy);
   bool valid_save = savecopy.checksum == cs;
+  bool has_file = valid_save && savecopy.game.win == 0;
   if (valid_save) {
-    saveroot.brightness = savecopy.brightness;
-    saveroot.songvol = savecopy.songvol;
-    saveroot.sfxvol = savecopy.sfxvol;
+    memcpy8(&saveroot, &savecopy, sizeof(struct save_st));
     snd_set_song_volume(saveroot.songvol);
     snd_set_sfx_volume(saveroot.sfxvol);
   }
@@ -1260,7 +1394,8 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
   for (;;) {
     g_sprites[S_TITLE_START + 0].origin.y = (MENU_Y - 5) + menu * 9;
     u32 next_spr = 1;
-    #define ADDSPR(pc1, pc2, sy)  do {                               \
+    #define ADDSPR(pc1, pc2)  do {                                   \
+        i32 sy = MENU_Y + ((next_spr - 1) >> 1) * 9;                 \
         g_sprites[S_TITLE_START + next_spr].pc = pc1;                \
         g_sprites[S_TITLE_START + next_spr].origin.x = MENU_X + 12;  \
         g_sprites[S_TITLE_START + next_spr].origin.y = sy;           \
@@ -1271,13 +1406,16 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
         next_spr++;                                                  \
       } while (0)
     if (valid_save) {
-      ADDSPR(ani_title_continue1, ani_title_continue2, MENU_Y);
-      ADDSPR(ani_title_newgame1, ani_title_newgame2, MENU_Y + 9);
-      ADDSPR(ani_title_delete1, ani_title_delete2, MENU_Y + 18);
+      if (has_file) {
+        ADDSPR(ani_title_continue1, ani_title_continue2);
+      }
+      ADDSPR(ani_title_newgame1, ani_title_newgame2);
+      ADDSPR(ani_title_delete1, ani_title_delete2);
     } else {
-      ADDSPR(ani_title_newgame1, ani_title_newgame2, MENU_Y);
-      ADDSPR(NULL, NULL, 0);
-      ADDSPR(NULL, NULL, 0);
+      ADDSPR(ani_title_newgame1, ani_title_newgame2);
+    }
+    while (next_spr <= 6) {
+      ADDSPR(NULL, NULL);
     }
     #undef ADDSPR
     nextframe();
@@ -1286,27 +1424,34 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
         menu--;
       }
     } else if (g_hit & SYS_INPUT_D) {
-      if (menu < (valid_save ? 2 : 0)) {
+      if (menu < (valid_save ? has_file ? 2 : 1 : 0)) {
         menu++;
       }
     } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
-      if (valid_save && menu == 2) {
+      if (
+        valid_save && (
+        (has_file && menu == 2) ||
+        (!has_file && menu == 1)
+      )) { // delete?
         g_sprites[S_TITLE_START + 0].pc = NULL;
         bool del = !!popup_delete();
         g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
         if (del) {
           // delete!
           save_savecopy(true);
+          saveroot.books = RESET_BOOKS;
+          saveroot.game.win = 3;
           valid_save = false;
           menu = 0;
         }
-      } else if (valid_save && menu == 0) {
+      } else if (valid_save && has_file && menu == 0) { // continue
         g_sprites[S_TITLE_START + 0].pc = NULL;
         palette_fadetoblack();
         menu = -1;
         break;
-      } else {
+      } else { // new game
         g_sprites[S_TITLE_START + 0].pc = NULL;
+        book_award(B_INTRO, 0);
         i32 diff = popup_newgame();
         if (diff < 0) {
           g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
@@ -1348,6 +1493,8 @@ static void move_game_cursor(i32 dx, i32 dy) {
 
 void gvmain() {
   sys_init();
+  saveroot.books = RESET_BOOKS;
+  saveroot.game.win = 3;
   saveroot.brightness = 2;
   saveroot.songvol = 6;
   saveroot.sfxvol = 16;
@@ -1363,9 +1510,7 @@ void gvmain() {
 start_title:
   load = title_screen();
 start_game:
-  if (load < 0) {
-    memcpy8(&saveroot, &savecopy, sizeof(struct save_st));
-  } else {
+  if (load >= 0) {
     load_level(load, rnd32(&g_rnd));
   }
   g_showing_levelup = false;
@@ -1400,7 +1545,7 @@ start_game:
       }
     } else {
       // play the game!
-      if ((g_down & SYS_INPUT_ZL) && !(game->difficulty & D_ONLYMINES)) {
+      if (g_cheat && (g_down & SYS_INPUT_ZL) && !(game->difficulty & D_ONLYMINES)) {
         if (hint_cooldown > 0) {
           hint_cooldown--;
         } else {
@@ -1442,13 +1587,8 @@ start_game:
         hint_cooldown = 0;
         hint_cooldown_max = 15;
       }
-      if (g_hit & SYS_INPUT_ZR) {
-        g_peek = !g_peek;
-        for (i32 y = 0; y < BOARD_H; y++) {
-          for (i32 x = 0; x < BOARD_W; x++) {
-            tile_update(x, y);
-          }
-        }
+      if (g_cheat && (g_hit & SYS_INPUT_ZR)) {
+        set_peek(!g_peek);
       }
       if (g_hit & SYS_INPUT_U) {
         move_game_cursor(0, -1);
@@ -1513,4 +1653,383 @@ start_game:
       }
     }
   }
+}
+
+static u16 restore_oam[0x200];
+static u16 restore_vram[240 * 80] SECTION_EWRAM;
+static i32 restore_mode;
+static u16 *const VRAM = (u16 *)0x06000000;
+static void book_click_start() {
+  palette_fadetoblack();
+  memcpy32(restore_oam, g_oam, 0x400);
+  memcpy32(restore_vram, VRAM, 240 * 160);
+}
+
+static void book_click_end() {
+  memcpy32(g_oam, restore_oam, 0x400);
+  memcpy32(VRAM, restore_vram, 240 * 160);
+  if (restore_mode == 0) { // title screen
+    gfx_showobj(true);
+  } else { // pause menu or win
+    set_game_gfx();
+    sys_set_bgt3_scroll(8, 13);
+    sys_set_bgt2_scroll(8, 13);
+    sys_set_bgt1_scroll(8, 10);
+    sys_set_bgt0_scroll(4, restore_mode == 1 ? -24 : -144);
+  }
+  palette_fadefromblack();
+}
+
+static i32 book_click_single_raw(const void *addr, u32 size) {
+  book_click_start();
+  book_scr_raw(addr, size);
+  book_click_end();
+  return 0;
+}
+#define book_click_single(a) book_click_single_raw(BINADDR(a), BINSIZE(a))
+
+static void book_click(enum book_enum book, i32 return_mode) {
+  if (!(saveroot.books & (1 << book))) {
+    // doesn't have book
+    sfx_bump();
+    return;
+  }
+  restore_mode = return_mode;
+  book_info(book, BI_CLICK);
+}
+
+static void book_award(enum book_enum book, i32 return_mode) {
+  if (saveroot.books & (1 << book)) { // already have the book
+    return;
+  }
+  saveroot.books |= 1 << book;
+  save_savecopy(false);
+  popup_show(book, 40);
+  if (book == B_100) {
+    waitstart();
+    popup_hide(40);
+    return;
+  }
+  g_sprites[S_POPUPCUR].pc = ani_arrowr2;
+  g_sprites[S_POPUPCUR].origin.y = 87;
+  i32 menu = 0;
+  for (;;) {
+    g_sprites[S_POPUPCUR].origin.x = 91 + menu * 30;
+    nextframe();
+    if (g_hit & SYS_INPUT_L) {
+      if (menu > 0) menu--;
+    } else if (g_hit & SYS_INPUT_R) {
+      if (menu < 1) menu++;
+    } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
+      g_sprites[S_POPUPCUR].pc = NULL;
+      popup_hide(40);
+      if (menu == 0) {
+        book_click(book, return_mode);
+      }
+      break;
+    }
+  }
+}
+
+static i32 count_dead(i32 type, i32 worth) {
+  i32 result = 0;
+  for (i32 k = 0; k < BOARD_SIZE; k++) {
+    if (
+      GET_TYPE(game->board[k]) == type &&
+      GET_STATUS(game->board[k]) == S_PRESSED
+    ) {
+      result += worth;
+    }
+  }
+  return result;
+}
+
+static i32 book_info(enum book_enum book, enum book_info_action action) {
+  #define DRAW(x, y, b)  ((x) | ((y) << 4) | ((b) << 8))
+  #define CHECKG()       if (game->difficulty & D_ONLYMINES) return 0
+  switch (book) {
+    case B_INTRO:
+      switch (action) {
+        case BI_DRAW: return DRAW(0, 0, 0);
+        case BI_CHECK: return 0;
+        case BI_CLICK:
+          book_click_start();
+          book_scr(scr_how1_o);
+          book_scr(scr_how2_o);
+          book_scr(scr_how3_o);
+          book_click_end();
+          return 0;
+      }
+      break;
+    case B_ITEMS:
+      switch (action) {
+        case BI_DRAW: return DRAW(1, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          // TODO: item screen should explain how to get books too (leave dead enemies around)
+          return 1;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LOWLEVEL:
+      switch (action) {
+        case BI_DRAW: return DRAW(2, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return (
+            count_dead(T_LV1A, 1) +
+            count_dead(T_LV2, 1) +
+            count_dead(T_LV3A, 1)
+          );
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV1B:
+      switch (action) {
+        case BI_DRAW: return DRAW(3, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV1B, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV3B:
+      switch (action) {
+        case BI_DRAW: return DRAW(4, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV3B, 5);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV3C:
+      switch (action) {
+        case BI_DRAW: return DRAW(5, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV3C, 5);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV4A:
+      switch (action) {
+        case BI_DRAW: return DRAW(6, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV4A, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV4B:
+      switch (action) {
+        case BI_DRAW: return DRAW(7, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV4B, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV4C:
+      switch (action) {
+        case BI_DRAW: return DRAW(8, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV4C, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV5A:
+      switch (action) {
+        case BI_DRAW: return DRAW(9, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV5A, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV5B:
+      switch (action) {
+        case BI_DRAW: return DRAW(0, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV5B, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV5C:
+      switch (action) {
+        case BI_DRAW: return DRAW(1, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV5C, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV6:
+      switch (action) {
+        case BI_DRAW: return DRAW(2, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV6, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV7:
+      switch (action) {
+        case BI_DRAW: return DRAW(3, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV7, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV8:
+      switch (action) {
+        case BI_DRAW: return DRAW(4, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV8, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV9:
+      switch (action) {
+        case BI_DRAW: return DRAW(5, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV9, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV10:
+      switch (action) {
+        case BI_DRAW: return DRAW(6, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV10, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV11:
+      switch (action) {
+        case BI_DRAW: return DRAW(7, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV11, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV13:
+      switch (action) {
+        case BI_DRAW: return DRAW(8, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return 50;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_MINE:
+      switch (action) {
+        case BI_DRAW: return DRAW(9, 1, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LAVA, 1) ? 0 : 10; // award mines if we *didn't* blow them up
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_WALL:
+      switch (action) {
+        case BI_DRAW: return DRAW(0, 2, 0);
+        case BI_CHECK:
+          CHECKG();
+          return game->difficulty >= 3 && game->difficulty <= 4 ? 10 : 0;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_CHEST:
+      switch (action) {
+        case BI_DRAW: return DRAW(1, 2, 0);
+        case BI_CHECK:
+          CHECKG();
+          return (
+            count_dead(T_CHEST_HEAL, 10) +
+            count_dead(T_CHEST_EYE2, 10) +
+            count_dead(T_CHEST_EXP, 10)
+          );
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LAVA:
+      switch (action) {
+        case BI_DRAW: return DRAW(2, 2, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LAVA, 10);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_EASY:
+      switch (action) {
+        case BI_DRAW: return DRAW(3, 2, 0);
+        case BI_CHECK: return game->difficulty == 0 ? 999 : 0;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_MILD:
+      switch (action) {
+        case BI_DRAW: return DRAW(4, 2, 0);
+        case BI_CHECK: return game->difficulty == 1 ? 999 : 0;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_NORMAL:
+      switch (action) {
+        case BI_DRAW: return DRAW(5, 2, 0);
+        case BI_CHECK: return game->difficulty == 2 ? 999 : 0;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_HARD:
+      switch (action) {
+        case BI_DRAW: return DRAW(6, 2, 0);
+        case BI_CHECK: return game->difficulty == 3 ? 999 : 0;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_EXPERT:
+      switch (action) {
+        case BI_DRAW: return DRAW(7, 2, 0);
+        case BI_CHECK: return game->difficulty == 4 ? 999 : 0;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_ONLYMINES:
+      switch (action) {
+        case BI_DRAW: return DRAW(8, 2, 0);
+        case BI_CHECK: return (game->difficulty & D_ONLYMINES) ? 999 : 0;
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_100:
+      switch (action) {
+        case BI_DRAW: return DRAW(9, 2, 0);
+        case BI_CHECK: return 0;
+        case BI_CLICK: {
+          bool was_cheating = g_cheat;
+          popup_cheat();
+          if (was_cheating != g_cheat) {
+            // TODO: reload appropriate song
+          }
+          if (g_cheat) {
+            // TODO: show how to cheat
+            book_click_single(scr_how1_o);
+          }
+          return 0;
+        }
+      }
+      break;
+  }
+  return 0;
+  #undef DRAW
+  #undef CHECKG
 }

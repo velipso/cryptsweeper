@@ -632,7 +632,7 @@ static i32 tile_info(
       break;
     case T_CHEST_HEAL:
       switch (action) {
-        case TI_ICON: return TILE(64, 32);
+        case TI_ICON: return TILE(208, 96);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_ITEM_HEAL);
         case TI_ATTACK: return 0;
@@ -640,7 +640,7 @@ static i32 tile_info(
       break;
     case T_CHEST_EYE2:
       switch (action) {
-        case TI_ICON: return TILE(64, 32);
+        case TI_ICON: return TILE(208, 96);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_ITEM_EYE2);
         case TI_ATTACK: return 0;
@@ -648,7 +648,7 @@ static i32 tile_info(
       break;
     case T_CHEST_EXP:
       switch (action) {
-        case TI_ICON: return TILE(64, 32);
+        case TI_ICON: return TILE(208, 96);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_ITEM_EXP5);
         case TI_ATTACK: return 0;
@@ -832,7 +832,7 @@ static i32 tile_info(
       break;
     case T_ITEM_LV3B0:
       switch (action) {
-        case TI_ICON: return TILE(32, 96);
+        case TI_ICON: return TILE(192, 16);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_EMPTY);
         case TI_ATTACK: return 0;
@@ -840,7 +840,7 @@ static i32 tile_info(
       break;
     case T_ITEM_LV3C0:
       switch (action) {
-        case TI_ICON: return TILE(48, 96);
+        case TI_ICON: return TILE(192, 32);
         case TI_THREAT: return 0;
         case TI_COLLECT: return replace_type(game, handler, T_EMPTY);
         case TI_ATTACK: return 0;

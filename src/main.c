@@ -1798,7 +1798,11 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_DRAW: return DRAW(4, 0, 0);
         case BI_CHECK:
           CHECKG();
-          return count_dead(T_LV3B, 5);
+          return (
+            count_dead(T_LV3B, 5) +
+            count_dead(T_ITEM_LV3B0, 5) +
+            count_dead(T_ITEM_EXP6, 5)
+          );
         case BI_CLICK: return book_click_single(scr_how1_o);
       }
       break;
@@ -1807,7 +1811,11 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_DRAW: return DRAW(5, 0, 0);
         case BI_CHECK:
           CHECKG();
-          return count_dead(T_LV3C, 5);
+          return (
+            count_dead(T_LV3C, 5) +
+            count_dead(T_ITEM_LV3C0, 5) +
+            count_dead(T_ITEM_EXP9, 5)
+          );
         case BI_CLICK: return book_click_single(scr_how1_o);
       }
       break;
@@ -1942,7 +1950,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_DRAW: return DRAW(0, 2, 0);
         case BI_CHECK:
           CHECKG();
-          return game->difficulty >= 3 && game->difficulty <= 4 ? 10 : 0;
+          return game->difficulty >= 2 && game->difficulty <= 4 ? 10 : 0;
         case BI_CLICK: return book_click_single(scr_how1_o);
       }
       break;

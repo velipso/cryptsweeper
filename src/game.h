@@ -27,7 +27,7 @@ typedef int32_t  i32;
 #define BOARD_CH    (BOARD_H >> 1)
 #define BOARD_SIZE  (BOARD_W * BOARD_H)
 
-#define GENERATE_SIZE  128
+#define GENERATE_SIZE  1024
 
 struct game_st {
   struct rnd_st rnd;

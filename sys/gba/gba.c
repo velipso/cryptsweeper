@@ -20,6 +20,7 @@ struct snd_st g_snd;
 static void (*g_vblank)();
 
 static void _sys_snd_init();
+static void _save_init();
 
 BINFILE(snd_tempo_bin);
 BINFILE(snd_wavs_bin);
@@ -27,7 +28,20 @@ BINFILE(snd_offsets_bin);
 BINFILE(snd_sizes_bin);
 BINFILE(snd_names_txt);
 
+static struct {
+  u32 region_count;
+  u32 cart_size;
+  struct {
+    u32 sectors;
+    u32 size;
+  } regions[4];
+} g_save;
+
+#define ROM_SET(x, y) do { ((volatile u16 *)0x08000000)[x] = y; __asm("nop"); } while (0)
+#define ROM_GET(x)    (((volatile u16 *)0x08000000)[x])
+
 void sys_init() {
+  _save_init();
   sys__irq_init();
   _sys_snd_init();
 }
@@ -38,7 +52,7 @@ bool sys_mGBA() {
   return *reg == 0x1dea;
 }
 
-static void _sys_wrap_vblank() {
+SECTION_IWRAM_ARM static void _sys_wrap_vblank() {
   // allow re-entrant IRQs so timer1 for snd is handled
   REG_IME = 1;
   if (g_vblank)
@@ -50,8 +64,8 @@ void sys_set_vblank(void (*irq_vblank_handler)()) {
   g_vblank = irq_vblank_handler;
 }
 
-void sys_nextframe() {
-  __asm__("swi #5" ::: "r0", "r1", "r2", "r3", "r12", "lr", "memory", "cc");
+SECTION_IWRAM_ARM void sys_nextframe() {
+  __asm__("swi #0x050000" ::: "r0", "r1", "r2", "r3", "r12", "lr", "memory", "cc");
 }
 
 static void _sys_snd_init() {
@@ -202,6 +216,184 @@ place_in_slot:
   g_snd.sfx[slot].samples_left = sizes[wav_index];
   g_snd.sfx[slot].priority = priority;
   return true;
+}
+
+SECTION_EWRAM_THUMB static void _save_init() {
+  g_save.region_count = 0;
+
+  // reset
+  ROM_SET(0, 0xf0);
+  // enter CFI
+  ROM_SET(0x55, 0x98);
+  u32 Q = ROM_GET(0x10);
+  u32 R = ROM_GET(0x11);
+  u32 Y = ROM_GET(0x12);
+
+  if (Q == 'Q' && R == 'R' && Y == 'Y') {
+    // CFI mode!
+    g_save.region_count = ROM_GET(0x2c);
+    if (g_save.region_count < 1 || g_save.region_count > 4) {
+      // something is wrong, fallback to SRAM
+      g_save.region_count = 0;
+    } else {
+      g_save.cart_size = 0;
+      for (i32 i = 0; i < g_save.region_count; i++) {
+        g_save.regions[i].sectors = (ROM_GET(0x2d + i * 4) | (ROM_GET(0x2e + i * 4) << 8)) + 1;
+        g_save.regions[i].size = (ROM_GET(0x2f + i * 4) | (ROM_GET(0x30 + i * 4) << 8)) << 8;
+        g_save.cart_size += g_save.regions[i].sectors * g_save.regions[i].size;
+      }
+    }
+  }
+
+  // reset
+  ROM_SET(0, 0xf0);
+}
+
+SECTION_EWRAM_THUMB static u32 save_calcflashsectors(u16 **primary, u16 **backup, u16 *write) {
+  // returns:
+  //   primary - primary sector address (i.e., last written save)
+  //   backup  - backup sector address (i.e., write here next)
+  //   write   - next priority to write to backup[sz-1] in order to make it primary
+  //   returns - size of sector, in 16-bit words (*not* bytes)
+  u32 last_sector_size = g_save.regions[g_save.region_count - 1].size;
+  u16 *s1 = (u16 *)(((u8 *)0x08000000) + g_save.cart_size - last_sector_size);
+  u16 *s2 = (u16 *)(((u8 *)s1) - last_sector_size);
+  u16 sz = last_sector_size >> 1; // number of 16-bit values per sector
+  u16 s1code = s1[sz - 1];
+  u16 s2code = s2[sz - 1];
+  #define ROCK      0xa5
+  #define PAPER     0xa9
+  #define SCISSORS  0xaa
+  if (s1code == ROCK) {
+    if (s2code == PAPER) {
+      if (primary) *primary = s2;
+      if (backup) *backup = s1;
+      if (write) *write = SCISSORS;
+      return sz;
+    } else if (s2code == SCISSORS) {
+      if (primary) *primary = s1;
+      if (backup) *backup = s2;
+      if (write) *write = PAPER;
+      return sz;
+    }
+  } else if (s1code == PAPER) {
+    if (s2code == SCISSORS) {
+      if (primary) *primary = s2;
+      if (backup) *backup = s1;
+      if (write) *write = ROCK;
+      return sz;
+    } else if (s2code == ROCK) {
+      if (primary) *primary = s1;
+      if (backup) *backup = s2;
+      if (write) *write = SCISSORS;
+      return sz;
+    }
+  } else if (s1code == SCISSORS) {
+    if (s2code == ROCK) {
+      if (primary) *primary = s2;
+      if (backup) *backup = s1;
+      if (write) *write = PAPER;
+      return sz;
+    } else if (s2code == PAPER) {
+      if (primary) *primary = s1;
+      if (backup) *backup = s2;
+      if (write) *write = ROCK;
+      return sz;
+    }
+  }
+  // otherwise, we're corrupt
+  if (s1code == ROCK || s1code == PAPER || s1code == SCISSORS) {
+    if (primary) *primary = s1;
+    if (backup) *backup = s2;
+    if (write) *write = s1code == ROCK ? PAPER : s1code == PAPER ? SCISSORS : ROCK;
+    return sz;
+  } else {
+    if (primary) *primary = s2;
+    if (backup) *backup = s1;
+    if (write) *write = s2code == ROCK ? PAPER : s2code == PAPER ? SCISSORS : ROCK;
+    return sz;
+  }
+  #undef ROCK
+  #undef PAPER
+  #undef SCISSORS
+}
+
+SECTION_EWRAM_THUMB void save_write(const void *src, u32 size) {
+  if (g_save.region_count == 0) {
+    // SRAM
+    memcpy8((void *)0x0e000000, src, size);
+  } else {
+    // Flash (assumes one sector for save)
+
+    // disable access to cart
+    void (*old_vblank)() = g_vblank;
+    g_vblank = NULL;
+    int old_volume = g_snd.master_volume;
+    g_snd.master_volume = 0;
+
+    volatile u16 *backup;
+    u16 write;
+    u32 sz = save_calcflashsectors(NULL, (u16 **)&backup, &write);
+
+    // erase sector
+    ROM_SET(0, 0xf0);
+    ROM_SET(0x555, 0xaa);
+    ROM_SET(0x2aa, 0x55);
+    ROM_SET(0x555, 0x80);
+    ROM_SET(0x555, 0xaa);
+    ROM_SET(0x2aa, 0x55);
+    backup[0] = 0x30;
+
+    // wait for erase to finish
+    for (;;) {
+      __asm("nop");
+      if (backup[0] == 0xffff) {
+        break;
+      }
+    }
+    ROM_SET(0, 0xf0);
+
+    // program sector
+    #define PROGRAM(pa, pd)  do {  \
+        ROM_SET(0x555, 0xaa);      \
+        ROM_SET(0x2aa, 0x55);      \
+        ROM_SET(0x555, 0xa0);      \
+        u16 v = pd;                \
+        backup[pa] = v;            \
+        for (;;) {                 \
+          __asm("nop");            \
+          if (backup[pa] == v) {   \
+            break;                 \
+          }                        \
+        }                          \
+      } while (0)
+    const u16 *src16 = src;
+    size >>= 1;
+    for (i32 i = 0; i < size; i++) {
+      PROGRAM(i, src16[i]);
+    }
+    PROGRAM(sz - 1, write); // write the final word that flips this sector to primary
+    #undef PROGRAM
+
+    // reset
+    ROM_SET(0, 0xf0);
+
+    // enable access to cart
+    g_snd.master_volume = old_volume;
+    g_vblank = old_vblank;
+  }
+}
+
+SECTION_EWRAM_THUMB void save_read(void *dst, u32 size) {
+  if (g_save.region_count == 0) {
+    // SRAM
+    memcpy8(dst, (void *)0x0e000000, size);
+  } else {
+    // Flash (assumes one sector for save)
+    u16 *primary;
+    save_calcflashsectors(&primary, NULL, NULL);
+    memcpy32(dst, primary, size);
+  }
 }
 
 #ifdef SYS_PRINT

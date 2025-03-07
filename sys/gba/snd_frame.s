@@ -139,9 +139,12 @@ render_channel:
     ldrh  rPhase, [rInstPtr, #SND_SONGINST_VOLUME_ENV_OFFSET]
     adds  rPhase, rInstPtr
     ldr   r0, [rChannelPtr, #SND_CHANNEL_ENV_VOLUME_INDEX]
+    // env volume 0-16
     ldrsb rFinalVolume, [rPhase, r0]
+    // channel volume 0-16
     ldr   r0, [rChannelPtr, #SND_CHANNEL_CHAN_VOLUME]
     muls  rFinalVolume, r0
+    // synth volume 0-16
     ldr   r0, =g_snd + SND_SYNTH + SND_SYNTH_VOLUME
     ldr   r0, [r0]
     muls  rFinalVolume, r0
@@ -191,7 +194,7 @@ render_channel:
 next_osc_sample: // core loop!
     // rWave data is 15bit
     // rOutputBuffer is 16bit
-    // rFinalVolume is 12bit (0-4096)
+    // rFinalVolume is 8bit (0-256)
     cmp   rChannelLeft, #0
     moveq rSample0, #0
     ldrne rSample0, [rOutputBuffer]
@@ -401,7 +404,7 @@ render_channel_continue:
     #define rDidClear        lr
 
     ldr   r0, =g_snd + SND_SFX
-    // pack sfx volumes into register
+    // pack sfx volumes (0-16) into register
     ldr   rSfxVolumes, [r0, #SND_SFX_WAV_VOLUME + SIZEOF_SND_SFX_ST * 0]
     ldr   rSfxPtr1, [r0, #SND_SFX_WAV_VOLUME + SIZEOF_SND_SFX_ST * 1]
     lsls  rSfxPtr1, #8
@@ -418,7 +421,7 @@ render_channel_continue:
     ldr   rSfxPtr2, [r0, #SND_SFX_WAV_BASE + SIZEOF_SND_SFX_ST * 2]
     ldr   rSfxPtr3, [r0, #SND_SFX_WAV_BASE + SIZEOF_SND_SFX_ST * 3]
 
-    // load volumes into rPackedVolumes 0xAAABBBB (AAAA = Master, BBBB = SFX)
+    // load volumes into rPackedVolumes 0x00AA00BB; AA = Master (0-16), BB = SFX (0-16)
     ldr   r0, =g_snd
     ldr   rPackedVolumes, [r0, #SND_SFX_VOLUME]
     ldr   rSampleLeft, [r0, #SND_MASTER_VOLUME]

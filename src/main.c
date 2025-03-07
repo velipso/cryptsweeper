@@ -98,7 +98,6 @@ static bool g_cheat = true; // TODO: change to false on release
 struct save_st saveroot;
 static struct game_st *const game = &saveroot.game;
 struct save_st savecopy SECTION_EWRAM;
-u8 *const saveaddr = (u8 *)0x0e000000;
 struct rnd_st g_rnd = { 1, 1 };
 static bool g_showing_levelup;
 static const struct {
@@ -176,7 +175,7 @@ static u32 calculate_checksum(struct save_st *g) {
 }
 
 static void load_savecopy() {
-  memcpy8(&savecopy, saveaddr, sizeof(struct save_st));
+  save_read(&savecopy, sizeof(struct save_st));
 }
 
 static inline void save_savecopy(bool del) {
@@ -188,7 +187,7 @@ static inline void save_savecopy(bool del) {
     // if deleting, corrupt the checksum
     savecopy.checksum ^= 0xaa55a5a5;
   }
-  memcpy8(saveaddr, &savecopy, sizeof(struct save_st));
+  save_write(&savecopy, sizeof(struct save_st));
 }
 
 static void nextframe() {

@@ -41,6 +41,8 @@ void snd_set_sfx_volume(int v); // 0-16
 int snd_find_wav(const char *name);
 bool snd_play_wav(int wav_index, int volume /* 0-16 */, int priority);
 bool sys_mGBA();
+void save_read(void *dst, u32 size);
+void save_write(const void *src, u32 size);
 
 #define RGB15(r, g, b)  (((r) & 0x1f) | (((g) & 0x1f) << 5) | (((b) & 0x1f) << 10))
 
@@ -54,9 +56,10 @@ extern void memset32(void *dest, u32 data, u32 bytecount);
 extern void memset16(void *dest, u32 data, u32 bytecount);
 extern void memset8(void *dest, u32 data, u32 bytecount);
 
-#define SECTION_EWRAM      __attribute__((section(".ewram")))
-#define SECTION_IWRAM_ARM  __attribute__((section(".iwram"), target("arm"), noinline))
-#define SECTION_ROM        __attribute__((section(".rodata")))
+#define SECTION_EWRAM        __attribute__((section(".ewram_data")))
+#define SECTION_EWRAM_THUMB  __attribute__((section(".ewram"), target("thumb"), noinline))
+#define SECTION_IWRAM_ARM    __attribute__((section(".iwram"), target("arm"), noinline))
+#define SECTION_ROM          __attribute__((section(".rodata")))
 
 #ifdef SYS_PRINT
 void sys_print(const char *fmt, ...);

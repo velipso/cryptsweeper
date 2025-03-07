@@ -130,7 +130,7 @@ static int song_parseeffect(const char *str) {
     int delay = (str[1] - '0') * 10 + (str[2] - '0');
     if (delay > 60)
       return -4; // delay out of range
-    return 0x00 | delay + 3;
+    return 0x00 | (delay + 3);
   }
   // parse volume
   if (

@@ -18,6 +18,7 @@
 #include "snd.h"
 #include "../src/game.h"
 #include "generate.h"
+#include "famistudio.h"
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
@@ -54,7 +55,9 @@ static void print_usage() {
     "\n"
     "  levels <seed> <output.bin>\n"
     "    Generate levels\n"
+    "\n"
   );
+  famistudio_help();
 }
 
 // align files to 4 bytes... required to keep linker in alignment (???)
@@ -430,6 +433,8 @@ int main(int argc, const char **argv) {
     return levels(atoi(argv[2]), argv[3]);
   } else if (strcmp(argv[1], "snd") == 0) {
     return snd_main(argc - 2, &argv[2]);
+  } else if (strcmp(argv[1], "famistudio") == 0) {
+    return famistudio_main(argc - 2, &argv[2]);
   } else {
     print_usage();
     fprintf(stderr, "\nUnknown command: %s\n", argv[1]);

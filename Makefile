@@ -76,6 +76,7 @@ OBJS := \
 	$(TGT_DATA)/palette_brightness.o \
 	$(TGT_DATA)/levels.o \
 	$(TGT_DATA)/song1.o \
+	$(TGT_DATA)/song2.o \
 	$(TGT_SND)/snd_osc.o \
 	$(TGT_SND)/snd_tempo.o \
 	$(TGT_SND)/snd_slice.o \
@@ -204,6 +205,11 @@ $(TGT_DATA)/song1.o: $(DATA)/song1.txt $(TGT_SND)/snd_names.txt $(XFORM)
 	$(MKDIR) -p $(@D)
 	$(XFORM) snd makesong $(DATA)/song1.txt $(TGT_SND)/snd_names.txt $(TGT_DATA)/song1.gvsong
 	$(call objbinary,$(TGT_DATA)/song1.gvsong)
+
+$(TGT_DATA)/song2.o: $(DATA)/song2.txt $(TGT_SND)/snd_names.txt $(XFORM)
+	$(MKDIR) -p $(@D)
+	$(XFORM) snd makesong $(DATA)/song2.txt $(TGT_SND)/snd_names.txt $(TGT_DATA)/song2.gvsong
+	$(call objbinary,$(TGT_DATA)/song2.gvsong)
 
 $(XFORM):
 	cd xform && make

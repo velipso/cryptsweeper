@@ -16,6 +16,7 @@ BINFILE(tiles_bin);
 BINFILE(ui_bin);
 BINFILE(sprites_bin);
 BINFILE(song1_gvsong);
+BINFILE(song2_gvsong);
 BINFILE(levels_bin);
 BINFILE(popups_bin);
 BINFILE(scr_title_o);

@@ -1498,7 +1498,7 @@ void gvmain() {
   saveroot.songvol = 6;
   saveroot.sfxvol = 16;
   snd_set_master_volume(16);
-  snd_load_song(BINADDR(song1_gvsong), 2); // silence
+  snd_load_song(BINADDR(song2_gvsong), 3);
   snd_set_song_volume(saveroot.songvol);
   snd_set_sfx_volume(saveroot.sfxvol);
   sys_set_vblank(irq_vblank);

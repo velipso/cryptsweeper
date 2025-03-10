@@ -9,6 +9,8 @@
 #include "stb_ds.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <math.h>
 
 void famistudio_help() {
   printf(
@@ -89,8 +91,9 @@ struct FS_Instrument {
   char *name;
   int expansion;
   int vrc6saw;
-  struct FS_Envelope volume;
   struct FS_Envelope dutycycle;
+  struct FS_Envelope volume;
+  struct FS_Envelope pitch;
 };
 
 struct FS_Note {
@@ -122,6 +125,7 @@ struct FS_Song {
   int length;
   int looppoint;
   int patternlength;
+  int beatlength;
   int notelength;
   int *groove;
   struct FS_Channel square1;
@@ -132,6 +136,7 @@ struct FS_Song {
   struct FS_Channel vrc6square2;
   struct FS_Channel vrc6saw;
   struct FS_Channel *currentchannel;
+  int currentoctave;
 };
 
 struct FS_Project {
@@ -164,16 +169,19 @@ static void fs_instrument_print(struct FS_Instrument *instrument) {
     instrument->expansion,
     instrument->vrc6saw
   );
-  printf("    Volume Envelope: ");
-  fs_envelope_print(&instrument->volume);
   printf("    Duty Cycle Envelope: ");
   fs_envelope_print(&instrument->dutycycle);
+  printf("    Volume Envelope: ");
+  fs_envelope_print(&instrument->volume);
+  printf("    Pitch Envelope: ");
+  fs_envelope_print(&instrument->pitch);
 }
 
 static void fs_instrument_free(struct FS_Instrument *instrument) {
   free(instrument->name);
-  arrfree(instrument->volume.values);
   arrfree(instrument->dutycycle.values);
+  arrfree(instrument->volume.values);
+  arrfree(instrument->pitch.values);
   free(instrument);
 }
 
@@ -209,6 +217,40 @@ static struct FS_Pattern *fs_pattern_new(const char *name) {
   return pattern;
 }
 
+static int fs_note_compare(const struct FS_Note **a, const struct FS_Note **b) {
+  return (*a)->time - (*b)->time;
+}
+
+static void fs_pattern_sort(struct FS_Pattern *pattern) {
+  qsort(
+    pattern->notes,
+    arrlen(pattern->notes),
+    sizeof(struct FS_Note *),
+    (int (*)(const void *, const void *))fs_note_compare
+  );
+}
+
+static void fs_pattern_fixduration(struct FS_Pattern *pattern, int patternlength, int notelength) {
+  for (int n = 0; n < arrlen(pattern->notes); n++) {
+    struct FS_Note *note = pattern->notes[n];
+    if (n < arrlen(pattern->notes) - 1) {
+      int nexttime = pattern->notes[n + 1]->time;
+      if (note->duration > 0 && note->time + note->duration >= nexttime) {
+        // next note will stop this note, so unset duration
+        note->duration = -1;
+      }
+    }
+    if (note->duration > 0 && note->time + note->duration > patternlength * notelength) {
+      // clamp to pattern boundary :-(
+      note->duration = patternlength * notelength - note->time;
+    }
+    if (note->duration > 0 && note->release > note->duration) {
+      // release is after duration, so unset it
+      note->release = -1;
+    }
+  }
+}
+
 static void fs_pattern_print(struct FS_Pattern *pattern) {
   printf("      Pattern '%s':\n", pattern->name);
   for (int i = 0; i < arrlen(pattern->notes); i++) {
@@ -240,6 +282,31 @@ static void fs_patterninstance_free(struct FS_PatternInstance *instance) {
   free(instance);
 }
 
+static int fs_instance_compare(
+  const struct FS_PatternInstance **a,
+  const struct FS_PatternInstance **b
+) {
+  return (*a)->time - (*b)->time;
+}
+
+static void fs_channel_sort(struct FS_Channel *channel) {
+  for (int p = 0; p < arrlen(channel->patterns); p++) {
+    fs_pattern_sort(channel->patterns[p]);
+  }
+  qsort(
+    channel->instances,
+    arrlen(channel->instances),
+    sizeof(struct FS_PatternInstance *),
+    (int (*)(const void *, const void *))fs_instance_compare
+  );
+}
+
+static void fs_channel_fixduration(struct FS_Channel *channel, int patternlength, int notelength) {
+  for (int p = 0; p < arrlen(channel->patterns); p++) {
+    fs_pattern_fixduration(channel->patterns[p], patternlength, notelength);
+  }
+}
+
 static void fs_channel_print(struct FS_Channel *channel) {
   for (int i = 0; i < arrlen(channel->patterns); i++) {
     fs_pattern_print(channel->patterns[i]);
@@ -265,18 +332,34 @@ static struct FS_Song *fs_song_new(const char *name) {
   struct FS_Song *song = calloc(1, sizeof(struct FS_Song));
   song->name = strdup(name);
   song->currentchannel = &song->square1;
+  song->currentoctave = 1;
   return song;
+}
+
+// calculate tempo based on groove
+// https://github.com/BleuBleu/FamiStudio/blob/d87138dd6b40e0c0391615b8be0d8ecf8fbf415d/FamiStudio/Source/Utils/TempoUtils.cs#L123
+static int fs_song_tempo(struct FS_Song *song) {
+  double gsum = 0;
+  int glen = arrlen(song->groove);
+  for (int i = 0; i < glen; i++) {
+    gsum += song->groove[i];
+  }
+  int i = 1;
+  for (; ((glen * i) % song->beatlength) != 0; i++);
+  return round(3600.0 * ((glen * i) / song->beatlength) / (gsum * i));
 }
 
 static void fs_song_print(struct FS_Song *song) {
   printf(
-    "  Song '%s' Length(%d) LoopPoint(%d) PatternLength(%d) NoteLength(%d) "
-    "Groove: {",
+    "  Song '%s' Length(%d) LoopPoint(%d) PatternLength(%d) BeatLength(%d) NoteLength(%d) "
+    "Tempo(%d) Groove: {",
     song->name,
     song->length,
     song->looppoint,
     song->patternlength,
-    song->notelength
+    song->beatlength,
+    song->notelength,
+    fs_song_tempo(song)
   );
   for (int i = 0; i < arrlen(song->groove); i++) {
     printf("%s%d", i > 0 ? ", " : "", song->groove[i]);
@@ -373,10 +456,12 @@ static void exe_cmd(struct FS_Project *project, const char *cmd, char **keys, ch
     struct FS_Instrument *instrument = project->instruments[arrlen(project->instruments) - 1];
     const char *type = get_kv("Type", "", keys, vals);
     struct FS_Envelope *envelope = NULL;
-    if (strcmp(type, "Volume") == 0) {
-      envelope = &instrument->volume;
-    } else if (strcmp(type, "DutyCycle") == 0) {
+    if (strcmp(type, "DutyCycle") == 0) {
       envelope = &instrument->dutycycle;
+    } else if (strcmp(type, "Volume") == 0) {
+      envelope = &instrument->volume;
+    } else if (strcmp(type, "Pitch") == 0) {
+      envelope = &instrument->pitch;
     }
     if (envelope) {
       envelope->loop = geti_kv("Loop", -1, keys, vals);
@@ -410,6 +495,7 @@ static void exe_cmd(struct FS_Project *project, const char *cmd, char **keys, ch
     song->length = geti_kv("Length", -1, keys, vals);
     song->looppoint = geti_kv("LoopPoint", -1, keys, vals);
     song->patternlength = geti_kv("PatternLength", -1, keys, vals);
+    song->beatlength = geti_kv("BeatLength", -1, keys, vals);
     song->notelength = geti_kv("NoteLength", -1, keys, vals);
     const char *groove = get_kv("Groove", "", keys, vals);
     int chi = 0;
@@ -434,26 +520,34 @@ static void exe_cmd(struct FS_Project *project, const char *cmd, char **keys, ch
     const char *type = get_kv("Type", "", keys, vals);
     if (strcmp(type, "Square1") == 0) {
       song->currentchannel = &song->square1;
+      song->currentoctave = 1;
     } else if (strcmp(type, "Square2") == 0) {
       song->currentchannel = &song->square2;
+      song->currentoctave = 1;
     } else if (strcmp(type, "Triangle") == 0) {
       song->currentchannel = &song->triangle;
+      song->currentoctave = 0;
     } else if (strcmp(type, "Noise") == 0) {
       song->currentchannel = &song->noise;
+      song->currentoctave = 1;
     } else if (strcmp(type, "VRC6Square1") == 0) {
       song->currentchannel = &song->vrc6square1;
+      song->currentoctave = 1;
     } else if (strcmp(type, "VRC6Square2") == 0) {
       song->currentchannel = &song->vrc6square2;
+      song->currentoctave = 1;
     } else if (strcmp(type, "VRC6Saw") == 0) {
       song->currentchannel = &song->vrc6saw;
+      song->currentoctave = 1;
     }
   } else if (strcmp(cmd, "Pattern") == 0) {
     struct FS_Pattern *pattern = fs_pattern_new(get_kv("Name", "Unknown", keys, vals));
     struct FS_Song *song = project->songs[arrlen(project->songs) - 1];
     arrpush(song->currentchannel->patterns, pattern);
   } else if (strcmp(cmd, "Note") == 0) {
+    struct FS_Song *song = project->songs[arrlen(project->songs) - 1];
     const char *valuestr = get_kv("Value", "", keys, vals);
-    int value = parse_note(valuestr, 0);
+    int value = parse_note(valuestr, song->currentoctave);
     if (value < 0) {
       fprintf(stderr, "Warning: Dropping note due to unknown value '%s'\n", valuestr);
     } else {
@@ -577,7 +671,473 @@ static struct FS_Project *fs_project_load(const char *input) {
     arrfree(vals);
   }
   fclose(fp);
+
+  // make sure notes and instances are sorted by time
+  for (int s = 0; s < arrlen(project->songs); s++) {
+    struct FS_Song *song = project->songs[s];
+    fs_channel_sort(&song->square1);
+    fs_channel_sort(&song->square2);
+    fs_channel_sort(&song->triangle);
+    fs_channel_sort(&song->noise);
+    fs_channel_sort(&song->vrc6square1);
+    fs_channel_sort(&song->vrc6square2);
+    fs_channel_sort(&song->vrc6saw);
+  }
+
+  // clean up note duration, which should only be set if we need a note stop command
+  for (int s = 0; s < arrlen(project->songs); s++) {
+    struct FS_Song *song = project->songs[s];
+    fs_channel_fixduration(&song->square1, song->patternlength, song->notelength);
+    fs_channel_fixduration(&song->square2, song->patternlength, song->notelength);
+    fs_channel_fixduration(&song->triangle, song->patternlength, song->notelength);
+    fs_channel_fixduration(&song->noise, song->patternlength, song->notelength);
+    fs_channel_fixduration(&song->vrc6square1, song->patternlength, song->notelength);
+    fs_channel_fixduration(&song->vrc6square2, song->patternlength, song->notelength);
+    fs_channel_fixduration(&song->vrc6saw, song->patternlength, song->notelength);
+  }
+
   return project;
+}
+
+struct GV_Envelope {
+  int loop;
+  int release;
+  int *values;
+};
+
+struct GV_Instrument {
+  char *comment;
+  char name[4];
+  char wave[4];
+  struct GV_Envelope volume;
+  struct GV_Envelope pitch;
+};
+
+struct GV_Sequence {
+  char *comment;
+  char **patterns;
+  int loop;
+};
+
+struct GV_Command {
+  int time;
+  char cmd[8];
+};
+
+struct GV_Channel {
+  struct GV_Command **commands;
+};
+
+struct GV_Pattern {
+  char *name;
+  int length;
+  struct GV_Channel **channels;
+};
+
+struct GV_Project {
+  struct GV_Instrument **instruments;
+  struct GV_Sequence **sequences;
+  struct GV_Pattern **patterns;
+};
+
+static void gv_envelope_print(struct GV_Envelope *envelope, FILE *fp) {
+  bool looped = false;
+  for (int i = 0; i < arrlen(envelope->values); i++) {
+    if (i == envelope->loop) {
+      looped = true;
+      fprintf(fp, "{");
+    }
+    fprintf(fp, "%d", envelope->values[i]);
+    if (i == envelope->release) {
+      looped = false;
+      fprintf(fp, "}");
+    }
+    if (i < arrlen(envelope->values) - 1) {
+      fprintf(fp, " ");
+    }
+  }
+  if (looped) {
+    fprintf(fp, "}");
+  }
+}
+
+static struct GV_Instrument *gv_instrument_new(const char *comment) {
+  struct GV_Instrument *instrument = calloc(1, sizeof(struct GV_Instrument));
+  instrument->comment = strdup(comment);
+  return instrument;
+}
+
+static void gv_instrument_print(struct GV_Instrument *instrument, FILE *fp) {
+  fprintf(fp,
+    "\n# %s\n"
+    "new instrument %s\n"
+    "  wave: %s\n"
+    "  phase: continue\n",
+    instrument->comment,
+    instrument->name,
+    instrument->wave
+  );
+  if (arrlen(instrument->volume.values) > 0) {
+    fprintf(fp, "  volume: ");
+    gv_envelope_print(&instrument->volume, fp);
+    fprintf(fp, "\n");
+  }
+  if (arrlen(instrument->pitch.values) > 0) {
+    fprintf(fp, "  pitch: ");
+    gv_envelope_print(&instrument->pitch, fp);
+    fprintf(fp, "\n");
+  }
+  fprintf(fp, "end\n");
+}
+
+static void gv_instrument_free(struct GV_Instrument *instrument) {
+  free(instrument->comment);
+  arrfree(instrument->volume.values);
+  arrfree(instrument->pitch.values);
+  free(instrument);
+}
+
+static struct GV_Sequence *gv_sequence_new(const char *comment) {
+  struct GV_Sequence *sequence = calloc(1, sizeof(struct GV_Sequence));
+  sequence->comment = strdup(comment);
+  sequence->loop = -1;
+  return sequence;
+}
+
+static void gv_sequence_print(struct GV_Sequence *sequence, int index, FILE *fp) {
+  fprintf(fp,
+    "\n# %s\n"
+    "new sequence %d\n",
+    sequence->comment,
+    index
+  );
+  bool looped = false;
+  for (int p = 0; p < arrlen(sequence->patterns); p++) {
+    if (p == sequence->loop) {
+      looped = true;
+      fprintf(fp, "  {\n");
+    }
+    fprintf(fp, "  %s\n", sequence->patterns[p]);
+  }
+  if (looped) {
+    fprintf(fp, "  }\n");
+  }
+  fprintf(fp, "end\n");
+}
+
+static void gv_sequence_free(struct GV_Sequence *sequence) {
+  free(sequence->comment);
+  for (int i = 0; i < arrlen(sequence->patterns); i++) {
+    free(sequence->patterns[i]);
+  }
+  arrfree(sequence->patterns);
+  free(sequence);
+}
+
+static struct GV_Command *gv_command_new() {
+  struct GV_Command *cmd = calloc(1, sizeof(struct GV_Command));
+  strcpy(cmd->cmd, "---:---");
+  return cmd;
+}
+
+static struct GV_Channel *gv_channel_new() {
+  return calloc(1, sizeof(struct GV_Channel));
+}
+
+static int gv_command_compare(const struct GV_Command **a, const struct GV_Command **b) {
+  return (*a)->time - (*b)->time;
+}
+
+static void gv_channel_sort(struct GV_Channel *channel) {
+  qsort(
+    channel->commands,
+    arrlen(channel->commands),
+    sizeof(struct GV_Command *),
+    (int (*)(const void *, const void *))gv_command_compare
+  );
+}
+
+static void gv_channel_free(struct GV_Channel *channel) {
+  for (int i = 0; i < arrlen(channel->commands); i++) {
+    free(channel->commands[i]);
+  }
+  arrfree(channel->commands);
+  free(channel);
+}
+
+static struct GV_Pattern *gv_pattern_new(const char *name) {
+  struct GV_Pattern *pattern = calloc(1, sizeof(struct GV_Pattern));
+  pattern->name = strdup(name);
+  return pattern;
+}
+
+static void gv_pattern_print(struct GV_Pattern *pattern, FILE *fp) {
+  fprintf(fp, "\nnew pattern %s\n", pattern->name);
+  int time = -1;
+  int *here = NULL;
+  for (int ch = 0; ch < arrlen(pattern->channels); ch++) {
+    struct GV_Channel *channel = pattern->channels[ch];
+    gv_channel_sort(channel);
+    if (arrlen(channel->commands) > 0) {
+      // get time of first event
+      if (channel->commands[0]->time < time || time < 0) {
+        time = channel->commands[0]->time;
+      }
+    }
+    arrpush(here, 0);
+  }
+  const char *beatstr = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (; time >= 0;) {
+    int beat = time / 16;
+    int step = time % 16;
+    int nexttime = -1;
+    if (beat >= 36) {
+      fprintf(fp, "  #%X", step);
+    } else {
+      fprintf(fp, "  %c%X", beatstr[beat], step);
+    }
+    for (int ch = 0; ch < arrlen(pattern->channels); ch++) {
+      struct GV_Channel *channel = pattern->channels[ch];
+      int h = here[ch];
+      if (h < arrlen(channel->commands) && channel->commands[h]->time == time) {
+        fprintf(fp, "  %s", channel->commands[h]->cmd);
+        here[ch] = h = h + 1;
+      } else {
+        fprintf(fp, "  ---:---");
+      }
+      if (h < arrlen(channel->commands) && (
+        channel->commands[h]->time < nexttime || nexttime < 0
+      )) {
+        nexttime = channel->commands[h]->time;
+      }
+    }
+    fprintf(fp, "\n");
+    time = nexttime;
+  }
+  arrfree(here);
+
+  // output END at pattern end
+  fprintf(fp, "  %c%X", beatstr[pattern->length / 16], pattern->length % 16);
+  for (int ch = 0; ch < arrlen(pattern->channels); ch++) {
+    fprintf(fp, ch == 0 ? "  END:---" : "  ---:---");
+  }
+  fprintf(fp, "\nend\n");
+}
+
+static void gv_pattern_free(struct GV_Pattern *pattern) {
+  free(pattern->name);
+  for (int i = 0; i < arrlen(pattern->channels); i++) {
+    gv_channel_free(pattern->channels[i]);
+  }
+  arrfree(pattern->channels);
+  free(pattern);
+}
+
+static struct GV_Project *gv_project_new() {
+  return calloc(1, sizeof(struct GV_Project));
+}
+
+static void gv_project_print(struct GV_Project *project, const char *input, FILE *fp) {
+  fprintf(fp, "# Project converted from: %s\n", input);
+  for (int i = 0; i < arrlen(project->instruments); i++) {
+    gv_instrument_print(project->instruments[i], fp);
+  }
+  for (int i = 0; i < arrlen(project->sequences); i++) {
+    gv_sequence_print(project->sequences[i], i, fp);
+  }
+  for (int i = 0; i < arrlen(project->patterns); i++) {
+    gv_pattern_print(project->patterns[i], fp);
+  }
+}
+
+static void gv_project_free(struct GV_Project *project) {
+  for (int i = 0; i < arrlen(project->instruments); i++) {
+    gv_instrument_free(project->instruments[i]);
+  }
+  arrfree(project->instruments);
+  for (int i = 0; i < arrlen(project->sequences); i++) {
+    gv_sequence_free(project->sequences[i]);
+  }
+  arrfree(project->sequences);
+  for (int i = 0; i < arrlen(project->patterns); i++) {
+    gv_pattern_free(project->patterns[i]);
+  }
+  arrfree(project->patterns);
+  free(project);
+}
+
+enum FS_ChannelType {
+  FS_SQUARE,
+  FS_TRIANGLE,
+  FS_NOISE,
+  FS_VRC6SQUARE,
+  FS_VRC6SAW
+};
+
+static void print_instrument(int inst, char *out) {
+  const char *s = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  out[0] = 'I';
+  int i = inst / 10;
+  if (i >= strlen(s)) {
+    out[1] = 'X';
+    out[2] = 'X';
+  } else {
+    out[1] = s[i];
+    out[2] = '0' + (inst % 10);
+  }
+}
+
+static const char *channel_type_str(enum FS_ChannelType type) {
+  switch (type) {
+    case FS_SQUARE:     return "square";
+    case FS_TRIANGLE:   return "triangle";
+    case FS_NOISE:      return "noise";
+    case FS_VRC6SQUARE: return "VRC6 square";
+    case FS_VRC6SAW:    return "VRC6 saw";
+  }
+  return "unknown";
+}
+
+static int find_or_add_instrument(
+  struct GV_Project *gv,
+  struct FS_Project *fs,
+  const char *instname,
+  enum FS_ChannelType type
+) {
+  for (int i = 0; i < arrlen(fs->instruments); i++) {
+    struct FS_Instrument *instrument = fs->instruments[i];
+    if (strcmp(instrument->name, instname) == 0) {
+      // create instrument
+      char name[100];
+      snprintf(name, sizeof(name), "%s [%s]", instname, channel_type_str(type));
+      int gvi = 0;
+      for (; gvi < arrlen(gv->instruments); gvi++) {
+        struct GV_Instrument *gvinst = gv->instruments[gvi];
+        if (strcmp(name, gvinst->comment) == 0) {
+          break;
+        }
+      }
+      int result;
+      if (gvi < arrlen(gv->instruments)) {
+        result = gvi + 1;
+      } else {
+        struct GV_Instrument *gvinst = gv_instrument_new(name);
+        switch (type) {
+          case FS_SQUARE:
+            if (arrlen(instrument->dutycycle.values) <= 0) {
+              strcpy(gvinst->wave, "sq2");
+            } else {
+              int d = instrument->dutycycle.values[0];
+              if (d == 1 || d == 3) {
+                strcpy(gvinst->wave, "sq4");
+              } else if (instrument->dutycycle.values[0] == 2) {
+                strcpy(gvinst->wave, "sq8");
+              } else {
+                strcpy(gvinst->wave, "sq2");
+              }
+            }
+            break;
+          case FS_TRIANGLE:
+            strcpy(gvinst->wave, "tri");
+            break;
+          case FS_NOISE:
+            strcpy(gvinst->wave, "rnd");
+            break;
+          case FS_VRC6SQUARE:
+            if (arrlen(instrument->dutycycle.values) <= 0) {
+              strcpy(gvinst->wave, "sq1");
+            } else {
+              int d = instrument->dutycycle.values[0];
+              gvinst->wave[0] = 's';
+              gvinst->wave[1] = 'q';
+              gvinst->wave[2] = '1' + d;
+            }
+            break;
+          case FS_VRC6SAW:
+            strcpy(gvinst->wave, "saw");
+            break;
+        }
+        #define COPY_ENV(id)  do {                                     \
+            gvinst->id.loop = instrument->id.loop;                     \
+            gvinst->id.release = instrument->id.release;               \
+            for (int i = 0; i < arrlen(instrument->id.values); i++) {  \
+              arrpush(gvinst->id.values, instrument->id.values[i]);    \
+            }                                                          \
+          } while (0)
+        COPY_ENV(volume);
+        COPY_ENV(pitch);
+        #undef COPY_ENV
+        arrpush(gv->instruments, gvinst);
+        result = arrlen(gv->instruments);
+        print_instrument(result, gvinst->name);
+      }
+      return result;
+    }
+  }
+  fprintf(stderr, "WARING: Missing instrument '%s'\n", instname);
+  return -1;
+}
+
+static void gv_channel_convert(
+  struct GV_Project *gv,
+  struct GV_Pattern **patterns,
+  struct FS_Project *fs,
+  struct FS_Song *song,
+  struct FS_Channel *fschannel,
+  enum FS_ChannelType type
+) {
+  for (int p = 0; p < arrlen(patterns); p++) {
+    struct GV_Pattern *pattern = patterns[p];
+    // TODO: support different pattern lengths instead of song default
+    pattern->length = song->patternlength * song->beatlength;
+    struct GV_Channel *channel = gv_channel_new();
+    arrpush(pattern->channels, channel);
+  }
+  for (int ins = 0; ins < arrlen(fschannel->instances); ins++) {
+    struct FS_PatternInstance *instance = fschannel->instances[ins];
+    struct FS_Pattern *fspattern = NULL;
+    for (int p = 0; p < arrlen(fschannel->patterns); p++) {
+      if (strcmp(fschannel->patterns[p]->name, instance->pattern) == 0) {
+        fspattern = fschannel->patterns[p];
+        break;
+      }
+    }
+    if (!fspattern) {
+      fprintf(stderr, "WARNING: Missing pattern '%s'\n", instance->pattern);
+      continue;
+    }
+    struct GV_Pattern *pattern = patterns[instance->time];
+    struct GV_Channel *channel = pattern->channels[arrlen(pattern->channels) - 1];
+    int inst = -1;
+    for (int n = 0; n < arrlen(fspattern->notes); n++) {
+      struct FS_Note *fsnote = fspattern->notes[n];
+      struct GV_Command *cmd = gv_command_new();
+      arrpush(channel->commands, cmd);
+      cmd->time = fsnote->time * song->beatlength / song->notelength;
+      print_note(fsnote->value, cmd->cmd);
+      int ninst = find_or_add_instrument(gv, fs, fsnote->instrument, type);
+      if (ninst != inst && ninst >= 0) {
+        inst = ninst;
+        print_instrument(inst, &cmd->cmd[4]);
+      }
+      if (fsnote->release > 0) {
+        struct GV_Command *rel = gv_command_new();
+        arrpush(channel->commands, rel);
+        rel->time = (fsnote->time + fsnote->release) * song->beatlength / song->notelength;
+        rel->cmd[0] = 'O';
+        rel->cmd[1] = 'F';
+        rel->cmd[2] = 'F';
+      }
+      if (fsnote->duration > 0) {
+        struct GV_Command *stop = gv_command_new();
+        arrpush(channel->commands, stop);
+        stop->time = (fsnote->time + fsnote->duration) * song->beatlength / song->notelength;
+        stop->cmd[0] = '0';
+        stop->cmd[1] = '0';
+        stop->cmd[2] = '0';
+      }
+    }
+  }
 }
 
 int famistudio_main(int argc, const char **argv) {
@@ -586,14 +1146,94 @@ int famistudio_main(int argc, const char **argv) {
     fprintf(stderr, "\nExpecting: famistudio <input.txt> <output.txt>\n");
     return 1;
   }
-  struct FS_Project *project = fs_project_load(argv[0]);
+  const char *input = argv[0];
   const char *output = argv[1];
+  struct FS_Project *fs = fs_project_load(input);
+  struct GV_Project *gv = gv_project_new();
 
-  // everything loaded into project
-  fs_project_print(project);
+  fs_project_print(fs);
 
-  // free project
-  fs_project_free(project);
+  // convert each song
+  for (int s = 0; s < arrlen(fs->songs); s++) {
+    struct FS_Song *song = fs->songs[s];
+    struct GV_Sequence *seq = gv_sequence_new(song->name);
+    char name[100];
+    snprintf(name, sizeof(name), "s%02dsetup", s);
+    arrpush(seq->patterns, strdup(name));
+    arrpush(gv->sequences, seq);
+    seq->loop = song->looppoint + 1; // skip over setup
+
+    struct GV_Pattern **songpats = NULL;
+    for (int p = 0; p < song->length; p++) {
+      snprintf(name, sizeof(name), "s%02dp%03d", s, p);
+      struct GV_Pattern *pattern = gv_pattern_new(name);
+      arrpush(gv->patterns, pattern);
+      arrpush(songpats, pattern);
+      arrpush(seq->patterns, strdup(name));
+    }
+    int chanlen = 0;
+    if (arrlen(song->square1.instances) > 0) {
+      chanlen++;
+      gv_channel_convert(gv, songpats, fs, song, &song->square1, FS_SQUARE);
+    }
+    if (arrlen(song->square2.instances) > 0) {
+      chanlen++;
+      gv_channel_convert(gv, songpats, fs, song, &song->square2, FS_SQUARE);
+    }
+    if (arrlen(song->triangle.instances) > 0) {
+      chanlen++;
+      gv_channel_convert(gv, songpats, fs, song, &song->triangle, FS_TRIANGLE);
+    }
+    if (arrlen(song->noise.instances) > 0) {
+      chanlen++;
+      gv_channel_convert(gv, songpats, fs, song, &song->noise, FS_NOISE);
+    }
+    if (arrlen(song->vrc6square1.instances) > 0) {
+      chanlen++;
+      gv_channel_convert(gv, songpats, fs, song, &song->vrc6square1, FS_VRC6SQUARE);
+    }
+    if (arrlen(song->vrc6square2.instances) > 0) {
+      chanlen++;
+      gv_channel_convert(gv, songpats, fs, song, &song->vrc6square2, FS_VRC6SQUARE);
+    }
+    if (arrlen(song->vrc6saw.instances) > 0) {
+      chanlen++;
+      gv_channel_convert(gv, songpats, fs, song, &song->vrc6saw, FS_VRC6SAW);
+    }
+    arrfree(songpats);
+
+    { // song setup
+      snprintf(name, sizeof(name), "s%02dsetup", s);
+      struct GV_Pattern *pattern = gv_pattern_new(name);
+      for (int ch = 0; ch < chanlen; ch++) {
+        struct GV_Channel *channel = gv_channel_new();
+        arrpush(pattern->channels, channel);
+        if (ch == 0) {
+          int tempo = fs_song_tempo(song);
+          struct GV_Command *cmd = gv_command_new();
+          cmd->time = 0;
+          cmd->cmd[4] = '0' + (tempo / 100);
+          cmd->cmd[5] = '0' + ((tempo / 10) % 10);
+          cmd->cmd[6] = '0' + (tempo % 10);
+          arrpush(channel->commands, cmd);
+        }
+      }
+      arrpush(gv->patterns, pattern);
+    }
+  }
+
+  FILE *fp = fopen(output, "w");
+  if (!fp) {
+    fprintf(stderr, "Error: Failed to write to: %s\n", output);
+    fs_project_free(fs);
+    gv_project_free(gv);
+    return 1;
+  }
+  gv_project_print(gv, input, fp);
+  fclose(fp);
+
+  fs_project_free(fs);
+  gv_project_free(gv);
 
   return 0;
 }

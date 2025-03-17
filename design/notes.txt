@@ -59,10 +59,10 @@ Achievements
 ============
  1. Story+How to Play+Credits - Sum up the monster levels, you can have zero hearts, kill vampire
  2. Items (Heart, Eye, Exp, Show Spiders, Show Slimes, Explode Mines, Books)
- 3. 1A/2/3A - Low level monsters, randomly placed, save if possible
+ 3. 1A/2 - Low level monsters, randomly placed, save if possible
  4. 1B - Slimeking on edge
- 5. 3B - Kill 2 to gain 6 exp (hard+)
- 6. 3C - Kill 3 to gain 9 exp (expert)
+ 5. 3A - Weak banshee sister
+ 6. 3B/3C - Kill 3 to gain 9 exp (expert)
  7. 4A - Rook (easy+)
  8. 4B - Bishop (mild+)
  9. 4C - Knight (hard+)

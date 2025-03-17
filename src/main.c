@@ -39,8 +39,8 @@ enum book_enum {
   B_ITEMS,
   B_LOWLEVEL,
   B_LV1B,
-  B_LV3B,
-  B_LV3C,
+  B_LV3A,
+  B_LV3BC,
   B_LV4A,
   B_LV4B,
   B_LV4C,
@@ -1777,8 +1777,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
           CHECKG();
           return (
             count_dead(T_LV1A, 1) +
-            count_dead(T_LV2, 1) +
-            count_dead(T_LV3A, 1)
+            count_dead(T_LV2, 1)
           );
         case BI_CLICK: return book_click_single(scr_how1_o);
       }
@@ -1792,25 +1791,24 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CLICK: return book_click_single(scr_how1_o);
       }
       break;
-    case B_LV3B:
+    case B_LV3A:
       switch (action) {
         case BI_DRAW: return DRAW(4, 0, 0);
+        case BI_CHECK:
+          CHECKG();
+          return count_dead(T_LV3A, 1);
+        case BI_CLICK: return book_click_single(scr_how1_o);
+      }
+      break;
+    case B_LV3BC:
+      switch (action) {
+        case BI_DRAW: return DRAW(5, 0, 0);
         case BI_CHECK:
           CHECKG();
           return (
             count_dead(T_LV3B, 5) +
             count_dead(T_ITEM_LV3B0, 5) +
             count_dead(T_ITEM_EXP6, 5)
-          );
-        case BI_CLICK: return book_click_single(scr_how1_o);
-      }
-      break;
-    case B_LV3C:
-      switch (action) {
-        case BI_DRAW: return DRAW(5, 0, 0);
-        case BI_CHECK:
-          CHECKG();
-          return (
             count_dead(T_LV3C, 5) +
             count_dead(T_ITEM_LV3C0, 5) +
             count_dead(T_ITEM_EXP9, 5)

@@ -122,7 +122,7 @@ $(TGT)/%.o: %.png $(XFORM) $(TGT_DATA)/palette.bin
 	$(XFORM) copy256 $< $(TGT_DATA)/palette.bin $(subst .bin,.png,$@)
 	$(call objbinary,$(subst .bin,.png,$@))
 
-.PHONY: all clean dump
+.PHONY: all clean dump books
 
 all: $(ROM)
 
@@ -228,5 +228,11 @@ dump: $(DUMP)
 
 clean:
 	$(RM) $(TGT)
+
+books: $(XFORM)
+	$(XFORM) books $(DATA)/sprites.png $(DATA)/books $(DATA)/screens
+	@for img in $(wildcard $(DATA)/screens/scr_book_*.png); do \
+		pngcrush -ow "$$img"; \
+	done
 
 -include $(DEPS)

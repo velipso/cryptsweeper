@@ -74,7 +74,7 @@ enum book_enum {
   B_100
 };
 #define B__SIZE      (B_100 + 1)
-#define RESET_BOOKS  0
+#define RESET_BOOKS  -1
 
 enum book_info_action {
   BI_DRAW,
@@ -1822,7 +1822,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
             count_dead(T_LV1A, 1) +
             count_dead(T_LV2, 1)
           );
-        case BI_CLICK: return book_click_single(scr_how1_o);
+        case BI_CLICK: return book_click_single(scr_book_lowlevel_o);
       }
       break;
     case B_LV1B:

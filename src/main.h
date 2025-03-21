@@ -25,5 +25,6 @@ BINFILE(scr_wingame_o);
 BINFILE(scr_how1_o);
 BINFILE(scr_how2_o);
 BINFILE(scr_how3_o);
+BINFILE(scr_book_lowlevel_o);
 
 void gvmain();

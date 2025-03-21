@@ -34,6 +34,13 @@
 #define S_KING3_BODY   126
 #define S_KING4_BODY   127
 
+enum song_enum {
+  SONG_TITLE,
+  SONG_SUCCESS,
+  SONG_FAILURE,
+  SONG_MAIN
+};
+
 enum book_enum {
   B_INTRO,
   B_ITEMS,
@@ -188,6 +195,34 @@ static inline void save_savecopy(bool del) {
     savecopy.checksum ^= 0xaa55a5a5;
   }
   save_write(&savecopy, sizeof(struct save_st));
+}
+
+static void play_song(enum song_enum song, bool restart) {
+  static enum song_enum current = (enum song_enum)999;
+  if (!restart && song == current) {
+    return;
+  }
+  current = song;
+  switch (song) {
+    case SONG_TITLE:
+      snd_load_song(BINADDR(song2_gvsong), 3);
+      break;
+    case SONG_SUCCESS:
+      snd_load_song(BINADDR(song2_gvsong), 1);
+      break;
+    case SONG_FAILURE:
+      snd_load_song(BINADDR(song2_gvsong), 2);
+      break;
+    case SONG_MAIN:
+      //snd_load_song(BINADDR(song2_gvsong), 0);
+      // TODO: play different song when cheating
+      if (g_cheat) {
+        snd_load_song(BINADDR(song1_gvsong), 0);
+      } else {
+        snd_load_song(BINADDR(song2_gvsong), 0);
+      }
+      break;
+  }
 }
 
 static void nextframe() {
@@ -780,6 +815,7 @@ static void exp_update(i32 cur, i32 max) {
 }
 
 static void you_lose(i32 x, i32 y) {
+  play_song(SONG_FAILURE, false);
   cursor_hide();
   if (GET_TYPE(game->board[x + y * BOARD_W]) == T_MINE) {
     shake_screen();
@@ -789,6 +825,7 @@ static void you_lose(i32 x, i32 y) {
 
 static void draw_level();
 static void you_win() {
+  play_song(SONG_SUCCESS, false);
   cursor_hide();
   palette_fadetoblack();
   save_savecopy(false);
@@ -1059,7 +1096,11 @@ static void popup_cheat() {
   }
   g_sprites[S_POPUPCUR].pc = NULL;
   popup_hide(72);
+  bool was_cheating = g_cheat;
   g_cheat = menu == 1;
+  if (g_cheat != was_cheating) {
+    play_song(SONG_MAIN, true);
+  }
   set_peek(g_cheat ? g_peek : false);
 }
 
@@ -1498,7 +1539,7 @@ void gvmain() {
   saveroot.songvol = 6;
   saveroot.sfxvol = 16;
   snd_set_master_volume(16);
-  snd_load_song(BINADDR(song2_gvsong), 3);
+  play_song(SONG_TITLE, true);
   snd_set_song_volume(saveroot.songvol);
   snd_set_sfx_volume(saveroot.sfxvol);
   sys_set_vblank(irq_vblank);
@@ -1507,6 +1548,7 @@ void gvmain() {
   palette_white(0);
   i32 load;
 start_title:
+  play_song(SONG_TITLE, false);
   load = title_screen();
 start_game:
   if (load >= 0) {
@@ -1514,6 +1556,7 @@ start_game:
   }
   g_showing_levelup = false;
   draw_level();
+  play_song(SONG_MAIN, false);
   palette_fadefromblack();
 
   i32 levelup_cooldown = 0;
@@ -1808,7 +1851,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
           return (
             count_dead(T_LV3B, 5) +
             count_dead(T_ITEM_LV3B0, 5) +
-            count_dead(T_ITEM_EXP6, 5)
+            count_dead(T_ITEM_EXP6, 5) +
             count_dead(T_LV3C, 5) +
             count_dead(T_ITEM_LV3C0, 5) +
             count_dead(T_ITEM_EXP9, 5)

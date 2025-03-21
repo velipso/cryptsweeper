@@ -529,7 +529,7 @@ static void exe_cmd(struct FS_Project *project, const char *cmd, char **keys, ch
       song->currentoctave = 0;
     } else if (strcmp(type, "Noise") == 0) {
       song->currentchannel = &song->noise;
-      song->currentoctave = 1;
+      song->currentoctave = 999;
     } else if (strcmp(type, "VRC6Square1") == 0) {
       song->currentchannel = &song->vrc6square1;
       song->currentoctave = 1;
@@ -547,7 +547,14 @@ static void exe_cmd(struct FS_Project *project, const char *cmd, char **keys, ch
   } else if (strcmp(cmd, "Note") == 0) {
     struct FS_Song *song = project->songs[arrlen(project->songs) - 1];
     const char *valuestr = get_kv("Value", "", keys, vals);
-    int value = parse_note(valuestr, song->currentoctave);
+    int value;
+    if (song->currentoctave == 999) { // noise
+      // noise has special handling
+      value = (parse_note(valuestr, 0) + 9) % 16;
+      value = value * 7 + 15;
+    } else {
+      value = parse_note(valuestr, song->currentoctave);
+    }
     if (value < 0) {
       fprintf(stderr, "Warning: Dropping note due to unknown value '%s'\n", valuestr);
     } else {

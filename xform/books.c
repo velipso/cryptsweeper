@@ -206,11 +206,11 @@ static struct book_st *book_new(const char *outputdir, const char *name) {
   g_book_seed = whisky2(g_book_seed, 123);
   snprintf(book->name, sizeof(book->name), "%s/scr_book_%s.png", outputdir, name);
   book->column[0].x = 16;
-  book->column[0].y = 8;
+  book->column[0].y = 12;
   book->column[0].w = 95;
   book->column[0].h = 130;
   book->column[1].x = 128;
-  book->column[1].y = 8;
+  book->column[1].y = 12;
   book->column[1].w = 95;
   book->column[1].h = 130;
   return book;
@@ -622,7 +622,7 @@ int books_main(int argc, const char **argv) {
     }
     chars_data = (u32 *)stbi_load_from_file(fp, &chars_data_width, &chars_data_height, NULL, 4);
     fclose(fp);
-    load_chars_row(0, "0123456789:!?.,'-");
+    load_chars_row(0, "0123456789:!?.,'-+");
     load_chars_row(1, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
     load_chars_row(2, "abcdefghijklmnopqrstuvwxyz");
   }
@@ -666,6 +666,7 @@ int books_main(int argc, const char **argv) {
 
   { // items
     bk_start(outputdir, "items1");
+    bk_pad   (-8);
     bk_tiles1(TPOS2(0, 112));
     bk_pad   (-2);
     bk_textu ("HEART");
@@ -676,7 +677,7 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Show area of the map");
     bk_tiles1(TPOS2(32, 112));
     bk_pad   (-2);
-    bk_textu ("SPY GLASS");
+    bk_textu ("SPYDER GLASS");
     bk_text  ("Show all the spiders");
     bk_nextcolumn();
     bk_tiles1(TPOS2(48, 112));
@@ -702,8 +703,8 @@ int books_main(int argc, const char **argv) {
     bk_textu ("BOOKS");
     bk_pad   (3);
     bk_para(
-      "Collect all the books by beating the game under different conditions.\n\n"
-      "Try killing monsters but don't collect their experience, or leaving items uncollected."
+      "Unlock books by beating the game in different ways.\n\n"
+      "Try skipping EXP drops or leaving items behind!"
     );
     bk_finish();
   }
@@ -732,7 +733,8 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 1");
     bk_nextcolumn();
     bk_para(
-      "TODO: Mummy"
+      "Placed on the edge of the screen, this shy mummy awkwardly shuffles around.\n\n"
+      "Defeat it to expose its hidden guardians - the sneaky Scarabs and fierce Anubis Warriors!"
     );
     bk_finish();
   }
@@ -744,7 +746,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 3");
     bk_nextcolumn();
     bk_para(
-      "TODO: Banshee Sister A"
+      "Randomly placed and eager to practice her piercing screams on you.\n\n"
+      "She's already loud enough solo, don't wait around for the rest of her spectral family "
+      "reunion!"
     );
     bk_finish();
   }
@@ -760,7 +764,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 3");
     bk_nextcolumn();
     bk_para(
-      "TODO: Banshee Twins Triplets BC"
+      "Twins: Randomly placed duo - double the shrieks, double the trouble! Defeat both twins to "
+      "claim your 6 EXP reward.\n\n"
+      "Triplets: Triple threat haunting random spots. Silence all three before earning your 9 EXP!"
     );
     bk_finish();
   }
@@ -772,7 +778,8 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 4");
     bk_nextcolumn();
     bk_para(
-      "TODO: Skeleton A"
+      "Placed in pairs horizontally or vertically - these bony buddies always stick together, "
+      "straight up plotting your demise."
     );
     bk_finish();
   }
@@ -784,7 +791,8 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 4");
     bk_nextcolumn();
     bk_para(
-      "TODO: Skeleton B"
+      "Appearing in pairs diagonally, they're ready to boogie into your grave.\n\n"
+      "Break their rhythm before they break yours!"
     );
     bk_finish();
   }
@@ -796,7 +804,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 4");
     bk_nextcolumn();
     bk_para(
-      "TODO: Skeleton C"
+      "Always placed in pairs a knight's move apart, these noble boneheads joust around "
+      "awkwardly.\n\n"
+      "Knock 'em off their high horses!"
     );
     bk_finish();
   }
@@ -808,7 +818,8 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 5");
     bk_nextcolumn();
     bk_para(
-      "TODO: Scarab"
+      "Scuttles randomly beneath the board, waiting to be uncovered by a defeated mummy.\n\n"
+      "Squish it before it bugs you!"
     );
     bk_finish();
   }
@@ -816,11 +827,13 @@ int books_main(int argc, const char **argv) {
   { // lv5b
     bk_start(outputdir, "lv5b");
     bk_tiles2(TPOS(160, 112), TPOS(176, 112));
-    bk_textu ("BIG SPIDER");
+    bk_textu ("WIDOW QUEEN");
     bk_text  ("Level: 5");
     bk_nextcolumn();
     bk_para(
-      "TODO: Big Spider"
+      "Crawling randomly around the graveyard, this protective arachnid mom is hiding her "
+      "mischievous spiderlings.\n\n"
+      "Squish her, and she'll reveal every creepy little Grave Spider lurking nearby!"
     );
     bk_finish();
   }
@@ -832,7 +845,8 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 5");
     bk_nextcolumn();
     bk_para(
-      "TODO: Swamp Witch"
+      "Randomly placed, this sneaky hag conceals enemy counts in a diamond around her.\n\n"
+      "Defeat her to clear the fog of war - and her terrible cooking!"
     );
     bk_finish();
   }
@@ -844,7 +858,8 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 6");
     bk_nextcolumn();
     bk_para(
-      "TODO: Draugr"
+      "Always lurking near treasure chests, this undead hoarder guards his loot fiercely.\n\n"
+      "Defeat him to claim what's rightfully yours!"
     );
     bk_finish();
   }
@@ -852,11 +867,13 @@ int books_main(int argc, const char **argv) {
   { // lv7
     bk_start(outputdir, "lv7");
     bk_tiles2(TPOS(208, 32), TPOS(224, 32));
-    bk_textu ("ZOMBIE");
+    bk_textu ("ZOMBOX");
     bk_text  ("Level: 7");
     bk_nextcolumn();
     bk_para(
-      "TODO: Zombie"
+      "Four zombies perfectly guarding the corners of their territory in synchronized undead "
+      "teamwork.\n\n"
+      "Break their formation, ruin their routine, and send them stumbling!"
     );
     bk_finish();
   }
@@ -868,7 +885,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 8");
     bk_nextcolumn();
     bk_para(
-      "TODO: Anubis Warrior"
+      "Always placed protectively around their mummy overlord, these overly-serious guardians "
+      "patrol tirelessly.\n\n"
+      "Send them packing back to the underworld - someone needs to lighten up that afterlife!"
     );
     bk_finish();
   }
@@ -880,7 +899,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 9");
     bk_nextcolumn();
     bk_para(
-      "TODO: Phantom Twins"
+      "Eerily placed as mirrored twins on the same row, these creepy siblings share everything - "
+      "including a surprisingly generous habit of dropping hearts when defeated.\n\n"
+      "Smash their spooky symmetry!"
     );
     bk_finish();
   }
@@ -891,8 +912,13 @@ int books_main(int argc, const char **argv) {
     bk_textu ("DRACULA");
     bk_text  ("Level: 10");
     bk_nextcolumn();
+    bk_pad   (10);
     bk_para(
-      "TODO: Dracula"
+      "Hidden randomly in a dark corner, Dracula broods in silence, annoyed by the noise and "
+      "bright lights of modern graveyards.\n\n"
+      "Defeat him to unleash Dracula's Ire - a tantrum so powerful it consumes all mines and "
+      "floods the map with bubbling lava.\n\n"
+      "He may be undead, but he's still dramatic!"
     );
     bk_finish();
   }
@@ -904,7 +930,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 11");
     bk_nextcolumn();
     bk_para(
-      "TODO: Mimic"
+      "Disguised as a chest - but beware!\n\n"
+      "Appearing only on Normal, Hard, and Expert difficulties, its suspiciously high level gives "
+      "away this treasure trap."
     );
     bk_finish();
   }
@@ -916,7 +944,8 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 13");
     bk_nextcolumn();
     bk_para(
-      "TODO: Death"
+      "He's tired, cranky, and determined to retire - by ending all humanity!\n\n"
+      "Defeat him to foil his dark retirement plans and claim victory!"
     );
     bk_finish();
   }
@@ -928,7 +957,10 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Instant Death");
     bk_nextcolumn();
     bk_para(
-      "TODO: Mine"
+      "Hidden randomly beneath the graveyard, stepping on this deadly surprise means instant "
+      "death!\n\n"
+      "But hold L+R when selecting your difficulty, and you'll uncover a secret, transforming your "
+      "spooky adventure into a classic challenge!"
     );
     bk_finish();
   }
@@ -939,7 +971,12 @@ int books_main(int argc, const char **argv) {
     bk_text  ("WALL");
     bk_nextcolumn();
     bk_para(
-      "TODO: Wall"
+      "Blocks your vision - but you can smash through if you're feeling bold!\n\n"
+      "It costs whatever you can afford:\n\n"
+      "Costs 6 HP, drops 5 EXP\n"
+      "Costs 4 HP, drops 3 EXP\n"
+      "Costs 2 HP, drops 1 EXP\n"
+      "Costs 1 HP, drops nothing!"
     );
     bk_finish();
   }
@@ -950,7 +987,10 @@ int books_main(int argc, const char **argv) {
     bk_text  ("CHEST");
     bk_nextcolumn();
     bk_para(
-      "TODO: Chest"
+      "Randomly scattered around the graveyard.\n\n"
+      "One lucky chest holds a precious lantern, three others hide 5 EXP each, and the rest "
+      "generously offer hearts.\n\n"
+      "Open carefully - treasure hunting has never felt so spooky!"
     );
     bk_finish();
   }
@@ -966,7 +1006,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("-1 HP");
     bk_nextcolumn();
     bk_para(
-      "TODO: Lava"
+      "Once you collect Dracula's Ire, lava floods the board, consuming all mines.\n\n"
+      "It leaves behind bubbling pools with enemy counts - but don't hover over them with your "
+      "cursor, or you'll take 1 HP of sizzling regret!"
     );
     bk_finish();
   }

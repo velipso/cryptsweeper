@@ -491,40 +491,40 @@ restart:
   copy_board(copy, board);
   for (i32 attempt = 0; ; attempt++) {
     // place the rest randomly
-    place_random(board, rnd, T_LV5B,  1); // spiderking
+    place_random(board, rnd, T_LV5B,  1); // big spider
     place_random(board, rnd, T_LV1A, 12);
     place_random(board, rnd, T_LV2 , 11);
     switch (diff) {
       case 0:
-        // no gazers (slimes instead)
+        // no witch (scarab instead)
         // no mimics (extra chest heal instead)
         place_random(board, rnd, T_CHEST_HEAL, 1);
-        place_random(board, rnd, T_LV5A, 10); // slime
+        place_random(board, rnd, T_LV5A, 10); // scarab
         place_random(board, rnd, T_LV3A,  9); // immediate exp
         break;
       case 1:
-        // no mimics (slime instead)
-        place_random(board, rnd, T_LV5A, 10); // slime
-        place_random(board, rnd, T_LV5C,  1); // gazer
+        // no mimics (scarab instead)
+        place_random(board, rnd, T_LV5A, 10); // scarab
+        place_random(board, rnd, T_LV5C,  1); // witch
         place_random(board, rnd, T_LV3A,  9); // immediate exp
         break;
       case 2:
         place_random(board, rnd, T_LV11, 1); // mimic
-        place_random(board, rnd, T_LV5A, 8); // slime
-        place_random(board, rnd, T_LV5C, 2); // gazer
+        place_random(board, rnd, T_LV5A, 8); // scarab
+        place_random(board, rnd, T_LV5C, 2); // witch
         place_random(board, rnd, T_LV3A, 9); // immediate exp
         break;
       case 3:
         place_random(board, rnd, T_LV11, 1); // mimic
-        place_random(board, rnd, T_LV5A, 8); // slime
-        place_random(board, rnd, T_LV5C, 2); // gazer
+        place_random(board, rnd, T_LV5A, 8); // scarab
+        place_random(board, rnd, T_LV5C, 2); // witch
         place_random(board, rnd, T_LV3A, 7); // immediate exp
         place_random(board, rnd, T_LV3B, 2); // delayed exp (group 2)
         break;
       case 4:
         place_random(board, rnd, T_LV11, 1); // mimic
-        place_random(board, rnd, T_LV5A, 8); // slime
-        place_random(board, rnd, T_LV5C, 2); // gazer
+        place_random(board, rnd, T_LV5A, 8); // scarab
+        place_random(board, rnd, T_LV5C, 2); // witch
         place_random(board, rnd, T_LV3A, 4); // immediate exp
         place_random(board, rnd, T_LV3B, 2); // delayed exp (group 2)
         place_random(board, rnd, T_LV3C, 3); // delayed exp (group 3)
@@ -538,7 +538,7 @@ restart:
       for (i32 x = 2; x < BOARD_W - 2; x++) {
         if (
           IS_EMPTY(board[x + y * BOARD_W]) &&
-          // don't reveal spiderking or higher
+          // don't reveal big spider or higher
           count_tiles(board, x, y, -2, istile_lv5bplus) == 0 &&
           // exactly one wall
           count_tiles(board, x, y, -2, istile_wall) == 1 &&

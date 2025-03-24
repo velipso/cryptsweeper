@@ -22,6 +22,8 @@ void books_help() {
 }
 
 #define TPOS(x, y)   ((x) + (y) * 1024)
+#define TPOS2(x, y)  ((x) + (y) * 1024 + (1 << 30))
+#define TPOS3(x, y)  ((x) + (y) * 1024 + (2 << 30))
 
 struct img_st {
   int w;
@@ -34,7 +36,8 @@ enum row_type {
   ROW_TEXT,
   ROW_TEXTU,
   ROW_PARA,
-  ROW_PAD
+  ROW_PAD,
+  ROW_IMG
 };
 
 struct row_st {
@@ -51,6 +54,12 @@ struct row_st {
       char data[4000];
     } para;
     int pad;
+    struct {
+      int x;
+      int y;
+      int w;
+      int h;
+    } img;
   } u;
 };
 
@@ -334,6 +343,7 @@ static struct row_st *row_para(struct book_st *b, const char *text) {
     }
   }
   if (line) {
+    arrpush(line, 0);
     arrpush(lines, line);
     line = NULL;
   }
@@ -380,6 +390,15 @@ static struct row_st *row_pad(int pad) {
   return row;
 }
 
+static struct row_st *row_img(int x, int y, int w, int h) {
+  struct row_st *row = row_new(ROW_IMG);
+  row->u.img.x = x;
+  row->u.img.y = y;
+  row->u.img.w = w;
+  row->u.img.h = h;
+  return row;
+}
+
 static void img_free(struct img_st *img) {
   if (img->data) free(img->data);
   free(img);
@@ -389,14 +408,14 @@ static struct img_st *row_render(struct row_st *r, int width, u32 seed) {
   struct img_st *img = calloc(1, sizeof(struct img_st));
   switch (r->type) {
     case ROW_TILES: {
-      img->w = 24 * r->u.tiles.size - 8; // 16 width + 8 margin right
+      img->w = 24 * r->u.tiles.size + 8; // 16 width + 8 collapsed margin
       img->h = 32;
       img->data = calloc(1, img->w * img->h * 4);
       for (int t = 0; t < r->u.tiles.size; t++) {
-        int x = t * 24;
+        int x = t * 24 + 8;
         int y = 8;
         int sx = 64 + 16 * (whisky2(seed, t) % 6);
-        int sy = 64;
+        int sy = (r->u.tiles.pos[t] >> 30) * 16 + 64;
         // copy random tile background
         for (int py = 0; py < 16; py++) {
           for (int px = 0; px < 16; px++) {
@@ -408,12 +427,34 @@ static struct img_st *row_render(struct row_st *r, int width, u32 seed) {
         }
         // copy tile
         sx = r->u.tiles.pos[t] & 1023;
-        sy = r->u.tiles.pos[t] >> 10;
+        sy = (r->u.tiles.pos[t] >> 10) & 1023;
         for (int py = 0; py < 16; py++) {
           for (int px = 0; px < 16; px++) {
             u32 c = tiles_data[(sx + px) + (sy + py) * tiles_data_width];
             if (c & 0xff000000) {
               img->data[(x + px) + (y + py) * img->w] = c;
+            }
+          }
+        }
+        // copy overlay
+        int ox = -1, oy = -1;
+        if (sx == 112 && sy == 32) { ox = 0; oy = 0; }
+        else if (sx == 128 && sy == 32) { ox = 2; oy = 0; }
+        else if (sx == 160 && sy == 112) { ox = 1; oy = 0; }
+        else if (sx == 176 && sy == 112) { ox = 3; oy = 0; }
+        else if (sx == 208 && sy == 80) { ox = 0; oy = 1; }
+        else if (sx == 224 && sy == 80) { ox = 2; oy = 1; }
+        else if (sx == 208 && sy == 112) { ox = 1; oy = 1; }
+        else if (sx == 224 && sy == 112) { ox = 3; oy = 1; }
+        if (ox >= 0) {
+          ox *= 32;
+          oy = (oy * 32) + 192;
+          for (int py = 0; py < 32; py++) {
+            for (int px = 0; px < 32; px++) {
+              u32 c = sprites_data[(ox + px) + (oy + py) * sprites_data_width];
+              if (c & 0xff000000) {
+                img->data[(x + px - 8) + (y + py - 8) * img->w] = c;
+              }
             }
           }
         }
@@ -450,6 +491,20 @@ static struct img_st *row_render(struct row_st *r, int width, u32 seed) {
       img->w = 1;
       img->h = r->u.pad;
       img->data = NULL;
+      break;
+    }
+    case ROW_IMG: {
+      img->w = r->u.img.w;
+      img->h = r->u.img.h;
+      img->data = calloc(1, img->w * img->h * 4);
+      for (int py = 0; py < r->u.img.h; py++) {
+        for (int px = 0; px < r->u.img.w; px++) {
+          u32 c = tiles_data[(r->u.img.x + px) + (r->u.img.y + py) * tiles_data_width];
+          if (c & 0xff000000) {
+            img->data[px + py * img->w] = c;
+          }
+        }
+      }
       break;
     }
   }
@@ -530,6 +585,10 @@ static void bk_pad(int pad) {
   book_push(book_current, row_pad(pad));
 }
 
+static void bk_img(int x, int y, int w, int h) {
+  book_push(book_current, row_img(x, y, w, h));
+}
+
 static void bk_finish() {
   struct book_st *b = book_current;
   printf("writing: %s\n", b->name);
@@ -563,7 +622,7 @@ int books_main(int argc, const char **argv) {
     }
     chars_data = (u32 *)stbi_load_from_file(fp, &chars_data_width, &chars_data_height, NULL, 4);
     fclose(fp);
-    load_chars_row(0, "0123456789:!?.,'");
+    load_chars_row(0, "0123456789:!?.,'-");
     load_chars_row(1, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
     load_chars_row(2, "abcdefghijklmnopqrstuvwxyz");
   }
@@ -605,19 +664,309 @@ int books_main(int argc, const char **argv) {
     fclose(fp);
   }
 
+  { // items
+    bk_start(outputdir, "items1");
+    bk_tiles1(TPOS2(0, 112));
+    bk_pad   (-2);
+    bk_textu ("HEART");
+    bk_text  ("Heal to full HP");
+    bk_tiles1(TPOS2(16, 112));
+    bk_pad   (-2);
+    bk_textu ("LANTERN");
+    bk_text  ("Show area of the map");
+    bk_tiles1(TPOS2(32, 112));
+    bk_pad   (-2);
+    bk_textu ("SPY GLASS");
+    bk_text  ("Show all the spiders");
+    bk_nextcolumn();
+    bk_tiles1(TPOS2(48, 112));
+    bk_textu ("EYE OF RA");
+    bk_text  ("Show Scarabs and");
+    bk_text  ("Anubis Warriors");
+    bk_tiles3(TPOS2(64, 112), TPOS2(80, 112), TPOS2(96, 112));
+    bk_textu ("EXPERIENCE");
+    bk_text  ("Add experience points");
+    bk_finish();
+
+    bk_start(outputdir, "items2");
+    bk_tiles1(TPOS2(144, 112));
+    bk_textu ("DRACULA'S IRE");
+    bk_text  ("? ? ?");
+    bk_tiles1(TPOS2(0, 96));
+    bk_textu ("EXIT DOOR");
+    bk_text  ("Escape after killing");
+    bk_text  ("Death");
+    bk_nextcolumn();
+    bk_img   (0, 14, 44, 18);
+    bk_pad   (8);
+    bk_textu ("BOOKS");
+    bk_pad   (3);
+    bk_para(
+      "Collect all the books by beating the game under different conditions.\n\n"
+      "Try killing monsters but don't collect their experience, or leaving items uncollected."
+    );
+    bk_finish();
+  }
+
   { // lowlevel
     bk_start(outputdir, "lowlevel");
-    bk_tiles2(TPOS(112, 16), TPOS(128, 16)); // grave spider
+    bk_tiles2(TPOS(112, 16), TPOS(128, 16));
     bk_textu ("GRAVE SPIDER");
     bk_text  ("Level: 1");
     bk_pad   (3);
-    bk_tiles2(TPOS(112, 48), TPOS(128, 48)); // ghost kid
+    bk_tiles2(TPOS(112, 48), TPOS(128, 48));
     bk_textu ("GHOST KID");
     bk_text  ("Level: 2");
     bk_nextcolumn();
     bk_para(
       "The Grave Spider is randomly placed. Squash it before its creepy legs find you first!\n\n"
       "The Ghost Kid pops up randomly as well, giggling at his own bad jokes. Remind him he's dead!"
+    );
+    bk_finish();
+  }
+
+  { // lv1b
+    bk_start(outputdir, "lv1b");
+    bk_tiles2(TPOS(112, 32), TPOS(128, 32));
+    bk_textu ("MUMMY");
+    bk_text  ("Level: 1");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Mummy"
+    );
+    bk_finish();
+  }
+
+  { // lv3a
+    bk_start(outputdir, "lv3a");
+    bk_tiles2(TPOS(160, 0), TPOS(176, 0));
+    bk_textu ("BANSHEE SISTER");
+    bk_text  ("Level: 3");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Banshee Sister A"
+    );
+    bk_finish();
+  }
+
+  { // lv3bc
+    bk_start(outputdir, "lv3bc");
+    bk_tiles2(TPOS(160, 16), TPOS(176, 16));
+    bk_textu ("BANSHEE TWINS");
+    bk_text  ("Level: 3");
+    bk_pad   (3);
+    bk_tiles2(TPOS(160, 32), TPOS(176, 32));
+    bk_textu ("BANSHEE TRIPLETS");
+    bk_text  ("Level: 3");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Banshee Twins Triplets BC"
+    );
+    bk_finish();
+  }
+
+  { // lv4a
+    bk_start(outputdir, "lv4a");
+    bk_tiles2(TPOS(160, 48), TPOS(176, 48));
+    bk_textu ("SKELETON");
+    bk_text  ("Level: 4");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Skeleton A"
+    );
+    bk_finish();
+  }
+
+  { // lv4b
+    bk_start(outputdir, "lv4b");
+    bk_tiles2(TPOS(160, 64), TPOS(176, 64));
+    bk_textu ("DISCO SKELETON");
+    bk_text  ("Level: 4");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Skeleton B"
+    );
+    bk_finish();
+  }
+
+  { // lv4c
+    bk_start(outputdir, "lv4c");
+    bk_tiles2(TPOS(160, 80), TPOS(176, 80));
+    bk_textu ("SKELETON KNIGHT");
+    bk_text  ("Level: 4");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Skeleton C"
+    );
+    bk_finish();
+  }
+
+  { // lv5a
+    bk_start(outputdir, "lv5a");
+    bk_tiles2(TPOS(160, 96), TPOS(176, 96));
+    bk_textu ("SCARAB");
+    bk_text  ("Level: 5");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Scarab"
+    );
+    bk_finish();
+  }
+
+  { // lv5b
+    bk_start(outputdir, "lv5b");
+    bk_tiles2(TPOS(160, 112), TPOS(176, 112));
+    bk_textu ("BIG SPIDER");
+    bk_text  ("Level: 5");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Big Spider"
+    );
+    bk_finish();
+  }
+
+  { // lv5c
+    bk_start(outputdir, "lv5c");
+    bk_tiles2(TPOS(208, 0), TPOS(224, 0));
+    bk_textu ("SWAMP WITCH");
+    bk_text  ("Level: 5");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Swamp Witch"
+    );
+    bk_finish();
+  }
+
+  { // lv6
+    bk_start(outputdir, "lv6");
+    bk_tiles2(TPOS(208, 16), TPOS(224, 16));
+    bk_textu ("DRAUGR");
+    bk_text  ("Level: 6");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Draugr"
+    );
+    bk_finish();
+  }
+
+  { // lv7
+    bk_start(outputdir, "lv7");
+    bk_tiles2(TPOS(208, 32), TPOS(224, 32));
+    bk_textu ("ZOMBIE");
+    bk_text  ("Level: 7");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Zombie"
+    );
+    bk_finish();
+  }
+
+  { // lv8
+    bk_start(outputdir, "lv8");
+    bk_tiles2(TPOS(208, 48), TPOS(224, 48));
+    bk_textu ("ANUBIS WARRIOR");
+    bk_text  ("Level: 8");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Anubis Warrior"
+    );
+    bk_finish();
+  }
+
+  { // lv9
+    bk_start(outputdir, "lv9");
+    bk_tiles2(TPOS(208, 64), TPOS(224, 64));
+    bk_textu ("PHANTOM TWINS");
+    bk_text  ("Level: 9");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Phantom Twins"
+    );
+    bk_finish();
+  }
+
+  { // lv10
+    bk_start(outputdir, "lv10");
+    bk_tiles2(TPOS(208, 80), TPOS(224, 80));
+    bk_textu ("DRACULA");
+    bk_text  ("Level: 10");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Dracula"
+    );
+    bk_finish();
+  }
+
+  { // lv11
+    bk_start(outputdir, "lv11");
+    bk_tiles2(TPOS(208, 96), TPOS(224, 96));
+    bk_textu ("MIMIC");
+    bk_text  ("Level: 11");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Mimic"
+    );
+    bk_finish();
+  }
+
+  { // lv13
+    bk_start(outputdir, "lv13");
+    bk_tiles2(TPOS(208, 112), TPOS(224, 112));
+    bk_textu ("DEATH");
+    bk_text  ("Level: 13");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Death"
+    );
+    bk_finish();
+  }
+
+  { // mine
+    bk_start(outputdir, "mine");
+    bk_tiles1(TPOS(64, 16));
+    bk_textu ("MINE");
+    bk_text  ("Instant Death");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Mine"
+    );
+    bk_finish();
+  }
+
+  { // wall
+    bk_start(outputdir, "wall");
+    bk_tiles1(TPOS(16, 96));
+    bk_text  ("WALL");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Wall"
+    );
+    bk_finish();
+  }
+
+  { // chest
+    bk_start(outputdir, "chest");
+    bk_tiles1(TPOS(208, 96));
+    bk_text  ("CHEST");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Chest"
+    );
+    bk_finish();
+  }
+
+  { // lava
+    bk_start(outputdir, "lava");
+    bk_tiles1(TPOS2(144, 112));
+    bk_textu ("DRACULA'S IRE");
+    bk_text  ("Activate lava to");
+    bk_text  ("explode all mines");
+    bk_tiles1(TPOS(64, 0));
+    bk_textu ("LAVA");
+    bk_text  ("-1 HP");
+    bk_nextcolumn();
+    bk_para(
+      "TODO: Lava"
     );
     bk_finish();
   }

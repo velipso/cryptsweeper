@@ -72,6 +72,7 @@ OBJS := \
 	$(TGT_DATA)/tiles.o \
 	$(TGT_DATA)/ui.o \
 	$(TGT_DATA)/sprites.o \
+	$(TGT_DATA)/lava.o \
 	$(TGT_DATA)/popups.o \
 	$(TGT_DATA)/palette_brightness.o \
 	$(TGT_DATA)/levels.o \
@@ -130,12 +131,14 @@ $(TGT_DATA)/palette.bin: \
 	$(DATA)/tiles.png \
 	$(DATA)/ui.png \
 	$(DATA)/sprites.png \
+	$(DATA)/lava.png \
 	$(DATA)/popups.png \
 	$(SOURCES_SCR) \
 	$(XFORM)
 	$(MKDIR) -p $(@D)
 	$(XFORM) palette256 $(TGT_DATA)/palette.bin \
-		$(DATA)/tiles.png $(DATA)/ui.png $(DATA)/sprites.png $(DATA)/popups.png $(SOURCES_SCR)
+		$(DATA)/tiles.png $(DATA)/ui.png $(DATA)/sprites.png $(DATA)/lava.png \
+		$(DATA)/popups.png $(SOURCES_SCR)
 
 $(TGT_DATA)/palette_brightness.o: $(TGT_DATA)/palette.bin
 	$(XFORM) brightness $(TGT_DATA)/palette_brightness.bin \
@@ -156,6 +159,11 @@ $(TGT_DATA)/sprites.o: $(DATA)/sprites.png $(TGT_DATA)/palette.bin $(XFORM)
 	$(MKDIR) -p $(@D)
 	$(XFORM) copy8x8 $(DATA)/sprites.png $(TGT_DATA)/palette.bin $(TGT_DATA)/sprites.bin
 	$(call objbinary,$(TGT_DATA)/sprites.bin)
+
+$(TGT_DATA)/lava.o: $(DATA)/lava.png $(TGT_DATA)/palette.bin $(XFORM)
+	$(MKDIR) -p $(@D)
+	$(XFORM) copy8x8 $(DATA)/lava.png $(TGT_DATA)/palette.bin $(TGT_DATA)/lava.bin
+	$(call objbinary,$(TGT_DATA)/lava.bin)
 
 $(TGT_DATA)/popups.o: $(DATA)/popups.png $(TGT_DATA)/palette.bin $(XFORM)
 	$(MKDIR) -p $(@D)

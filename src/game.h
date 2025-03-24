@@ -43,7 +43,7 @@ struct game_st {
     i8 size;
     u8 x[4];
     u8 y[4];
-  } slimeking;
+  } mummy;
   u8 losthp;
   i8 notes[BOARD_SIZE];
   u8 board[BOARD_SIZE];
@@ -65,7 +65,7 @@ enum game_type {
   T_EMPTY     ,
   T_LAVA      ,
   T_LV1A      , /* spider */
-  T_LV1B      , /* slimeking */
+  T_LV1B      , /* mummy */
   T_LV2       ,
   T_LV3A      , /* normal */
   T_LV3B      , /* group 2 */
@@ -73,9 +73,9 @@ enum game_type {
   T_LV4A      , /* rook */
   T_LV4B      , /* bishop */
   T_LV4C      , /* knight */
-  T_LV5A      , /* slime */
-  T_LV5B      , /* spiderking */
-  T_LV5C      , /* gazer */
+  T_LV5A      , /* beetle */
+  T_LV5B      , /* big spider */
+  T_LV5C      , /* swamp witch */
   T_LV6       ,
   T_LV7       ,
   T_LV8       ,

@@ -595,7 +595,7 @@ const u16 ani_title_delete2[] = {
   STOP()
 };
 
-const u16 ani_lv1b[] = {
+const u16 ani_lv1b_f1[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(0, 192),
@@ -604,7 +604,7 @@ const u16 ani_lv1b[] = {
   Y(-8),
   STOP()
 };
-const u16 ani_lv1b_dead[] = {
+const u16 ani_lv1b_f2[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(64, 192),
@@ -613,7 +613,7 @@ const u16 ani_lv1b_dead[] = {
   Y(-8),
   STOP()
 };
-const u16 ani_lv5b[] = {
+const u16 ani_lv5b_f1[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(32, 192),
@@ -622,7 +622,7 @@ const u16 ani_lv5b[] = {
   Y(-8),
   STOP()
 };
-const u16 ani_lv5b_dead[] = {
+const u16 ani_lv5b_f2[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(96, 192),
@@ -631,7 +631,7 @@ const u16 ani_lv5b_dead[] = {
   Y(-8),
   STOP()
 };
-const u16 ani_lv10[] = {
+const u16 ani_lv10_f1[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(0, 224),
@@ -640,7 +640,7 @@ const u16 ani_lv10[] = {
   Y(-8),
   STOP()
 };
-const u16 ani_lv10_dead[] = {
+const u16 ani_lv10_f2[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(64, 224),
@@ -649,7 +649,7 @@ const u16 ani_lv10_dead[] = {
   Y(-8),
   STOP()
 };
-const u16 ani_lv13[] = {
+const u16 ani_lv13_f1[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(32, 224),
@@ -658,7 +658,7 @@ const u16 ani_lv13[] = {
   Y(-8),
   STOP()
 };
-const u16 ani_lv13_dead[] = {
+const u16 ani_lv13_f2[] = {
   RESET(),
   SIZE_32x32(),
   TILEXY(96, 224),
@@ -682,5 +682,33 @@ const u16 ani_gray2[] = {
   TILEXY(112, 0),
   PRIORITY(1),
   WAIT(25),
+  DESTROY()
+};
+const u16 ani_explodeL[] = {
+  SOFTRESET(),
+  SIZE_8x8(),
+  TILEXY(112, 16),
+  PRIORITY(1),
+  WAIT(30),
+  TILEXY(112, 24),
+  WAIT(10),
+  TILEXY(112, 32),
+  WAIT(10),
+  TILEXY(112, 40),
+  WAIT(10),
+  DESTROY()
+};
+const u16 ani_explodeR[] = {
+  SOFTRESET(),
+  SIZE_8x8(),
+  TILEXY(120, 16),
+  PRIORITY(1),
+  WAIT(30),
+  TILEXY(120, 24),
+  WAIT(10),
+  TILEXY(120, 32),
+  WAIT(10),
+  TILEXY(120, 40),
+  WAIT(10),
   DESTROY()
 };

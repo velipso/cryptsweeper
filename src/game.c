@@ -31,7 +31,7 @@ void game_new(struct game_st *game, i32 difficulty, u32 seed, const u8 *board) {
   game->difficulty = difficulty;
   game->win = 0;
   game->hp = max_hp(game);
-  game->slimeking.size = 0;
+  game->mummy.size = 0;
   game->losthp = 0;
   game->selx = BOARD_CW;
   game->sely = BOARD_CH;
@@ -947,7 +947,7 @@ static bool tile_could_threat(struct game_st *game, i32 x, i32 y, i32 threat) {
   return true;
 }
 
-static i32 gazer_evidence(struct game_st *game, i32 x, i32 y) { // -1 = impossible
+static i32 witch_evidence(struct game_st *game, i32 x, i32 y) { // -1 = impossible
   i32 evidence = 0;
   i32 w = 0;
   for (i32 dy = -2; dy <= 2; dy++) {
@@ -989,7 +989,7 @@ next_dy:
   return evidence;
 }
 
-static i32 slimeking_evidence(struct game_st *game, i32 x, i32 y, bool phase1) { // -1 = impossible
+static i32 mummy_evidence(struct game_st *game, i32 x, i32 y, bool phase1) { // -1 = impossible
   i32 evidence = 0;
   for (i32 dy = -2; dy <= 2; dy++) {
     i32 by = dy + y;
@@ -1056,8 +1056,8 @@ i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
   #define K_ATTACKLV10()   (knowledge &   8)
   #define K_LV9HEAL()      (knowledge &  16)
   #define K_LV9MIRROR()    (knowledge &  32)
-  #define K_SLIMEKING()    (knowledge &  64)
-  #define K_GAZER()        (knowledge & 128)
+  #define K_MUMMY()        (knowledge &  64)
+  #define K_WITCH()        (knowledge & 128)
   #define H_CLICK(x, y)    (0x00000000 | (x) | ((y) << 8))
   #define H_NOTE(x, y, n)  (0x00010000 | (x) | ((y) << 8) | (((u8)n) << 24))
   #define H_LEVELUP()      0x00020000
@@ -1142,17 +1142,17 @@ i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
     }
   }
 
-  if (K_SLIMEKING()) { // find and kill the slimeking
-    if (game->slimeking.size == 0) {
+  if (K_MUMMY()) { // find and kill the mummy
+    if (game->mummy.size == 0) {
       // phase 1 - find potential locations
-      #define CHECK(sx, sy)  do {                            \
-          if (slimeking_evidence(game, sx, sy, true) > 0) {  \
-            game->slimeking.x[game->slimeking.size] = sx;    \
-            game->slimeking.y[game->slimeking.size] = sy;    \
-            game->slimeking.size++;                          \
-            handler(game, EV_DEBUGLOG, 0x20, sx);            \
-            handler(game, EV_DEBUGLOG, 0x21, sy);            \
-          }                                                  \
+      #define CHECK(sx, sy)  do {                        \
+          if (mummy_evidence(game, sx, sy, true) > 0) {  \
+            game->mummy.x[game->mummy.size] = sx;        \
+            game->mummy.y[game->mummy.size] = sy;        \
+            game->mummy.size++;                          \
+            handler(game, EV_DEBUGLOG, 0x20, sx);        \
+            handler(game, EV_DEBUGLOG, 0x21, sy);        \
+          }                                              \
         } while (0)
       for (i32 y = 1; y < BOARD_H - 1; y++) {
         CHECK(0, y);
@@ -1164,28 +1164,28 @@ i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
       }
       #undef CHECK
     }
-    if (game->slimeking.size > 1) {
+    if (game->mummy.size > 1) {
       // phase 2 - eliminate until only one left
-      for (i32 i = 0; i < game->slimeking.size; i++) {
-        if (slimeking_evidence(game, game->slimeking.x[i], game->slimeking.y[i], false) < 0) {
+      for (i32 i = 0; i < game->mummy.size; i++) {
+        if (mummy_evidence(game, game->mummy.x[i], game->mummy.y[i], false) < 0) {
           // this one is eliminated
-          handler(game, EV_DEBUGLOG, 0x22, game->slimeking.x[i]);
-          handler(game, EV_DEBUGLOG, 0x23, game->slimeking.y[i]);
-          game->slimeking.size--;
-          for (i32 j = i; j < game->slimeking.size; j++) {
-            game->slimeking.x[j] = game->slimeking.x[j + 1];
-            game->slimeking.y[j] = game->slimeking.y[j + 1];
+          handler(game, EV_DEBUGLOG, 0x22, game->mummy.x[i]);
+          handler(game, EV_DEBUGLOG, 0x23, game->mummy.y[i]);
+          game->mummy.size--;
+          for (i32 j = i; j < game->mummy.size; j++) {
+            game->mummy.x[j] = game->mummy.x[j + 1];
+            game->mummy.y[j] = game->mummy.y[j + 1];
           }
           i--;
         }
       }
     }
-    if (game->slimeking.size == 1) {
+    if (game->mummy.size == 1) {
       // phase 3 - kill it! or note it if no HP
-      i32 x = game->slimeking.x[0];
-      i32 y = game->slimeking.y[0];
+      i32 x = game->mummy.x[0];
+      i32 y = game->mummy.y[0];
       if (game->hp >= 1) {
-        game->slimeking.size = -1; // all done!
+        game->mummy.size = -1; // all done!
         return H_CLICK(x, y);
       } else if (game->notes[x + y * BOARD_W] == -3) {
         return H_NOTE(x, y, 1);
@@ -1260,7 +1260,7 @@ i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
             }
           }
         }
-        i32 gazer = K_GAZER() && threat >= 5 ? gazer_evidence(game, x, y) : -1;
+        i32 witch = K_WITCH() && threat >= 5 ? witch_evidence(game, x, y) : -1;
         i32 hidden = 0;
 
         if (threat == 0) {
@@ -1275,7 +1275,7 @@ i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
           const i32 thrm = 6; // tuned via testing *shrug*
           const i32 gazm = 3; // tuned via testing *shrug*
           const i32 hidm = 2; // tuned via testing *shrug*
-          score += gazer > 0 ? gazer * gazm : 0;
+          score += witch > 0 ? witch * gazm : 0;
           if (K_SAVELV1LV2() && (threat == 1 || threat == 2)) {
             score += threat * thrm; // avoid killing 1-2's since they're most useful
           } else if (K_ATTAKCLV3() && threat == 3) {
@@ -1286,9 +1286,9 @@ i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
             score += (threat + 2) * thrm; // favor higher level monsters
           }
           score += hidden * hidm; // favor cells next to unknowns
-        } else if (gazer > 0) {
-          // there is a pretty good chance this cell is a gazer -- this *could* kill us!
-          if (game->hp >= 5 && threat < 0x100 && gazer >= 4) score += gazer;
+        } else if (witch > 0) {
+          // there is a pretty good chance this cell is a witch -- this *could* kill us!
+          if (game->hp >= 5 && threat < 0x100 && witch >= 4) score += witch;
           else continue;
         } else {
           // this cell would kill us!
@@ -1359,6 +1359,6 @@ i32 game_hint(struct game_st *game, game_handler_f handler, i32 knowledge) {
   #undef K_ATTACKLV10
   #undef K_LV9HEAL
   #undef K_LV9MIRROR
-  #undef K_SLIMEKING
-  #undef K_GAZER
+  #undef K_MUMMY
+  #undef K_WITCH
 }

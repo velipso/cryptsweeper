@@ -75,14 +75,16 @@ extern const u16 ani_title_newgame2[];
 extern const u16 ani_title_delete1[];
 extern const u16 ani_title_delete2[];
 
-extern const u16 ani_lv1b[];
-extern const u16 ani_lv1b_dead[];
-extern const u16 ani_lv5b[];
-extern const u16 ani_lv5b_dead[];
-extern const u16 ani_lv10[];
-extern const u16 ani_lv10_dead[];
-extern const u16 ani_lv13[];
-extern const u16 ani_lv13_dead[];
+extern const u16 ani_lv1b_f1[];
+extern const u16 ani_lv1b_f2[];
+extern const u16 ani_lv5b_f1[];
+extern const u16 ani_lv5b_f2[];
+extern const u16 ani_lv10_f1[];
+extern const u16 ani_lv10_f2[];
+extern const u16 ani_lv13_f1[];
+extern const u16 ani_lv13_f2[];
 
 extern const u16 ani_gray1[];
 extern const u16 ani_gray2[];
+extern const u16 ani_explodeL[];
+extern const u16 ani_explodeR[];

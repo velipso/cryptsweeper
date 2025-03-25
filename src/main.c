@@ -101,7 +101,7 @@ static i32 g_statsel_y;
 static i32 g_next_particle = S_PART_START;
 static i32 g_lava_frame = 0;
 static bool g_peek = false;
-static bool g_cheat = true; // TODO: change to false on release
+static bool g_cheat = false;
 
 struct save_st saveroot;
 static struct game_st *const game = &saveroot.game;
@@ -242,7 +242,7 @@ static void waitstart() {
   for (;;) {
     nextframe();
     if (delay > 0) delay--;
-    else if ((g_hit & SYS_INPUT_ST) || (g_hit && SYS_INPUT_A)) break;
+    else if ((g_hit & SYS_INPUT_ST) || (g_hit & SYS_INPUT_A)) break;
   }
 }
 
@@ -1588,12 +1588,19 @@ start_game:
   play_song(SONG_MAIN, false);
   palette_fadefromblack();
 
-#if 0
-  // preview book popups
-  for (int i = 0; i < 30; i++) {
-    popup_show(i, 40);
-    waitstart();
-    popup_hide(40);
+#if 1 // TODO: remove when making final build
+  if (g_down & SYS_INPUT_ZL) {
+    // preview book popups
+    g_cheat = true;
+    for (int i = 0; i < 30; i++) {
+      popup_show(i, 40);
+      for (;;) {
+        nextframe();
+        if (g_hit & SYS_INPUT_ZL) { i = 30; break; }
+        else if ((g_down & SYS_INPUT_ST) || (g_down & SYS_INPUT_A)) break;
+      }
+      popup_hide(40);
+    }
   }
 #endif
 

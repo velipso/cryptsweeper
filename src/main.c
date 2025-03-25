@@ -74,7 +74,7 @@ enum book_enum {
   B_100
 };
 #define B__SIZE      (B_100 + 1)
-#define RESET_BOOKS  -1
+#define RESET_BOOKS  0
 
 enum book_info_action {
   BI_DRAW,
@@ -1587,6 +1587,15 @@ start_game:
   draw_level();
   play_song(SONG_MAIN, false);
   palette_fadefromblack();
+
+#if 0
+  // preview book popups
+  for (int i = 0; i < 30; i++) {
+    popup_show(i, 40);
+    waitstart();
+    popup_hide(40);
+  }
+#endif
 
   i32 levelup_cooldown = 0;
   i32 next_tile_update = 5;

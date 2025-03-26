@@ -1013,6 +1013,39 @@ int books_main(int argc, const char **argv) {
     bk_finish();
   }
 
+  #if 0
+  {
+    bk_start(outputdir, "how2");
+    bk_nextcolumn();
+    bk_para(
+      "Zero hearts is okay - just don't drop below!\n\n"
+      "Defeat Death to win.\n\n"
+      "Kill monsters, collect EXP, and level up to stay alive!\n\n"
+      "Enemies follow patterns - keep playing to learn them!"
+    );
+    bk_finish();
+  }
+  #endif
+
+  #if 0
+  {
+    bk_start(outputdir, "credits");
+    bk_nextcolumn();
+    bk_para(
+      "CREDITS\n"
+      "Crypt Sweeper made by Sean Connelly and Casey Dean\n"
+      "c 2025 Pocket Pulp LLC\n"
+      "All Rights Reserved\n"
+      "www.pulp.biz\n"
+      "SPECIAL THANKS\n"
+      "danielben - Creator of DragonSweeper which inspired this game\n"
+      "L.Beethoven - Moonlight Sonata\n"
+      "Adigun Polack - AAP-64 Palette"
+    );
+    bk_finish();
+  }
+  #endif
+
   stbi_image_free(sprites_data);
   stbi_image_free(tiles_data);
   stbi_image_free(bg_data);

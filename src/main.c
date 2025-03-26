@@ -2109,7 +2109,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
       switch (action) {
         case BI_DRAW: return DRAW(8, 2, 3);
         case BI_CHECK: return (game->difficulty & D_ONLYMINES) ? 999 : 0;
-        case BI_CLICK: return book_click_img1(scr_how1_o);
+        case BI_CLICK: return book_click_img1(scr_winmine_o);
       }
       break;
     case B_100:

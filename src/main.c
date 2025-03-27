@@ -85,10 +85,14 @@ enum book_info_action {
 struct save_st {
   u32 checksum;
   u32 books;
+  u32 seed;
+  u32 min;
+  u32 sec;
+  u32 cycles;
+  u8 cheated;
   u8 songvol;
   u8 sfxvol;
   u8 brightness;
-  u8 reserved;
   struct game_st game;
 };
 
@@ -100,6 +104,7 @@ static i32 g_statsel_x;
 static i32 g_statsel_y;
 static i32 g_next_particle = S_PART_START;
 static i32 g_lava_frame = 0;
+static bool g_time = false;
 static bool g_peek = false;
 static bool g_cheat = false;
 
@@ -119,6 +124,12 @@ static const struct {
   { T_LV13, ani_lv13_f1, ani_lv13_f2 }
 };
 static struct { i32 x, y; } g_kingxy[4];
+static const u16 *const ani_statsX[] = {
+  ani_stats0, ani_stats1, ani_stats2, ani_stats3,
+  ani_stats4, ani_stats5, ani_stats6, ani_stats7,
+  ani_stats8, ani_stats9, ani_statsA, ani_statsB,
+  ani_statsC, ani_statsD, ani_statsE, ani_statsF
+};
 
 // map 0-10 -> 0-16
 static const u16 volume_map_fwd[] SECTION_ROM =
@@ -173,6 +184,17 @@ static void SECTION_IWRAM_ARM irq_vblank() {
     if ((g_lava_frame & 7) == 0) {
       sys_copy_tiles(0, 512, BINADDR(lava_bin) + (g_lava_frame >> 2) * 640, 640);
       sys_copy_tiles(0, 2560, BINADDR(lava_bin) + ((g_lava_frame >> 2) + 1) * 640, 640);
+    }
+  }
+  if (g_time && saveroot.min < 1000) {
+    saveroot.cycles += 280896;
+    if (saveroot.cycles >= (1 << 24)) {
+      saveroot.cycles -= 1 << 24;
+      saveroot.sec++;
+      if (saveroot.sec >= 60) {
+        saveroot.sec -= 60;
+        saveroot.min++;
+      }
     }
   }
 }
@@ -261,6 +283,22 @@ static u32 dig99(i32 num) {
     num < 90 ? 8 : 9;
   u32 d2 = num - d1 * 10;
   return (d1 << 4) | d2;
+}
+
+static u32 dig999(i32 num) {
+  if (num < 0) num = 0;
+  if (num > 999) num = 999;
+  u32 d0 =
+    num < 100 ? 0 :
+    num < 200 ? 1 :
+    num < 300 ? 2 :
+    num < 400 ? 3 :
+    num < 500 ? 4 :
+    num < 600 ? 5 :
+    num < 700 ? 6 :
+    num < 800 ? 7 :
+    num < 900 ? 8 : 9;
+  return (d0 << 8) | dig99(num - d0 * 100);
 }
 
 static void place_particle(i32 x, i32 y, i32 dx, i32 dy, i32 ddy, const u16 *spr) {
@@ -658,6 +696,11 @@ static const u16 stat_tiles_bot0[] SECTION_ROM = {
 };
 
 static void load_level(i32 diff, u32 seed) {
+  saveroot.seed = seed;
+  saveroot.min = 0;
+  saveroot.sec = 0;
+  saveroot.cycles = 0;
+  saveroot.cheated = 0;
   u32 group = seed & (GENERATE_SIZE - 1);
   sys_print("new game seed: %x, group: %x, diff: %x", seed, group, diff);
   const u8 *levels = BINADDR(levels_bin);
@@ -695,6 +738,10 @@ static void tile_update(i32 x, i32 y) {
   i32 k = x + y * BOARD_W;
   u8 t = game->board[k];
   i32 frame = IS_MONSTER(t) && GET_TYPE(t) != T_LV11 ? (rnd32(&g_rnd) & 1) : 0;
+
+  if (g_peek) {
+    saveroot.cheated = 1;
+  }
 
   for (i32 king = 0; king < 4; king++) {
     if (x == g_kingxy[king].x && y == g_kingxy[king].y) {
@@ -839,6 +886,7 @@ static void exp_update(i32 cur, i32 max) {
 }
 
 static void you_lose(i32 x, i32 y) {
+  g_time = false;
   play_song(SONG_FAILURE, false);
   cursor_hide();
   if (GET_TYPE(game->board[x + y * BOARD_W]) == T_MINE) {
@@ -848,8 +896,87 @@ static void you_lose(i32 x, i32 y) {
   save_savecopy(false);
 }
 
+static void hide_time_seed() {
+  for (i32 s = 0; s < 21; s++) {
+    g_sprites[S_PART_START + s].pc = NULL;
+  }
+}
+
+static void draw_time_seed() {
+  const void *popup_addr = BINADDR(popups_bin);
+  popup_addr += 8 * 512 * 33 + (saveroot.cheated ? 512 * 4 : 0);
+  for (i32 i = 0; i < 4; i++, popup_addr += 512) {
+    sys_copy_tiles(4, 16384 + i * 1024, popup_addr, 512);
+  }
+  i32 s = S_PART_START;
+  i32 x = 78;
+  i32 y = 143;
+
+  #define PUSH(apc, dx)  do {     \
+      g_sprites[s].pc = apc;      \
+      g_sprites[s].origin.x = x;  \
+      g_sprites[s].origin.y = y;  \
+      s++;                        \
+      x += dx;                    \
+    } while (0)
+
+  // "TIME"
+  PUSH(ani_statstime, 30);
+
+  { // minutes
+    i32 min = saveroot.min >= 1000 ? 999 : saveroot.min;
+    i32 d999 = dig999(min);
+    i32 d0 = d999 >> 8;
+    i32 d1 = (d999 >> 4) & 15;
+    i32 d2 = d999 & 15;
+    if (d0 > 0) {
+      PUSH(ani_statsX[d0], 6);
+    } else {
+      x += 6;
+    }
+    if (d0 > 0 || d1 > 0) {
+      PUSH(ani_statsX[d1], 6);
+    } else {
+      x += 6;
+    }
+    PUSH(ani_statsX[d2], 7);
+  }
+  // ":"
+  PUSH(ani_statscol, 5);
+  { // seconds
+    i32 sec = saveroot.min >= 1000 ? 59 : saveroot.sec;
+    i32 d99 = dig99(sec);
+    PUSH(ani_statsX[d99 >> 4], 6);
+    PUSH(ani_statsX[d99 & 15], 7);
+  }
+  PUSH(ani_statsper, 5);
+  { // milliseconds
+    i32 ms = saveroot.min >= 1000 ? 99 : ((saveroot.cycles * 100) >> 24);
+    i32 d99 = dig99(ms);
+    PUSH(ani_statsX[d99 >> 4], 6);
+    PUSH(ani_statsX[d99 & 15], 7);
+  }
+
+  x = 78;
+  y += 8;
+
+  // "SEED"
+  PUSH(ani_statsseed, 30);
+  { // difficulty
+    i32 d = (saveroot.game.difficulty & D_ONLYMINES)
+      ? 10 + (saveroot.game.difficulty ^ D_ONLYMINES)
+      : saveroot.game.difficulty;
+    PUSH(ani_statsX[d], 6);
+  }
+  for (u32 i = 0, seed = saveroot.seed; i < 8; i++, seed <<= 4) {
+    PUSH(ani_statsX[seed >> 28], 6);
+  }
+  #undef PUSH
+}
+
 static void draw_level();
 static void you_win() {
+  g_time = false;
   play_song(SONG_SUCCESS, false);
   cursor_hide();
   palette_fadetoblack();
@@ -863,9 +990,11 @@ static void you_win() {
     // TODO: different end screens
     load_scr(scr_wingame_o);
   }
+  draw_time_seed();
   palette_fadefromblack();
   waitstart();
   palette_fadetoblack();
+  hide_time_seed();
   draw_level();
   palette_fadefromblack();
 
@@ -1577,9 +1706,11 @@ void gvmain() {
   palette_white(0);
   i32 load;
 start_title:
+  g_time = false;
   play_song(SONG_TITLE, false);
   load = title_screen();
 start_game:
+  g_time = false;
   if (load >= 0) {
     load_level(load, rnd32(&g_rnd));
   }
@@ -1588,7 +1719,7 @@ start_game:
   play_song(SONG_MAIN, false);
   palette_fadefromblack();
 
-#if 1 // TODO: remove when making final build
+#if 0
   if (g_down & SYS_INPUT_ZL) {
     // preview book popups
     g_cheat = true;
@@ -1608,6 +1739,7 @@ start_game:
   i32 next_tile_update = 5;
   i32 hint_cooldown = 0;
   i32 hint_cooldown_max = 15;
+  g_time = true;
   for (;;) {
     if (levelup_cooldown > 0) levelup_cooldown--;
     if (next_tile_update > 0) {
@@ -1637,6 +1769,7 @@ start_game:
           hint_cooldown--;
         } else {
           // let the computer play
+          saveroot.cheated = 1;
           hint_cooldown = hint_cooldown_max;
           if (hint_cooldown_max > 0) hint_cooldown_max--;
           i32 hint = game_hint(game, handler, -1);
@@ -1722,6 +1855,7 @@ start_game:
           sfx_bump();
         }
       } else if (g_hit & SYS_INPUT_ST) {
+        g_time = false;
         i32 p = pause_menu();
         if (p >= 0 && p < 0x100) {
           // new game
@@ -1737,6 +1871,7 @@ start_game:
           }
           goto start_title;
         }
+        g_time = true;
       }
     }
   }

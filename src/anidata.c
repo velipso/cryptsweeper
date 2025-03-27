@@ -712,3 +712,126 @@ const u16 ani_explodeR[] = {
   WAIT(10),
   DESTROY()
 };
+
+#define STATSXY(x, y)  TILEXY(x * 8, y * 8 + 128)
+const u16 ani_stats0[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(0, 0),
+  STOP()
+};
+const u16 ani_stats1[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(1, 0),
+  STOP()
+};
+const u16 ani_stats2[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(2, 0),
+  STOP()
+};
+const u16 ani_stats3[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(3, 0),
+  STOP()
+};
+const u16 ani_stats4[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(4, 0),
+  STOP()
+};
+const u16 ani_stats5[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(5, 0),
+  STOP()
+};
+const u16 ani_stats6[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(6, 0),
+  STOP()
+};
+const u16 ani_stats7[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(7, 0),
+  STOP()
+};
+const u16 ani_stats8[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(0, 1),
+  STOP()
+};
+const u16 ani_stats9[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(1, 1),
+  STOP()
+};
+const u16 ani_statsA[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(2, 1),
+  STOP()
+};
+const u16 ani_statsB[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(3, 1),
+  STOP()
+};
+const u16 ani_statsC[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(4, 1),
+  STOP()
+};
+const u16 ani_statsD[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(5, 1),
+  STOP()
+};
+const u16 ani_statsE[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(6, 1),
+  STOP()
+};
+const u16 ani_statsF[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(7, 1),
+  STOP()
+};
+const u16 ani_statscol[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(0, 2),
+  STOP()
+};
+const u16 ani_statsper[] = {
+  RESET(),
+  SIZE_8x8(),
+  STATSXY(1, 2),
+  STOP()
+};
+const u16 ani_statstime[] = {
+  RESET(),
+  SIZE_32x8(),
+  STATSXY(0, 3),
+  STOP()
+};
+const u16 ani_statsseed[] = {
+  RESET(),
+  SIZE_32x8(),
+  STATSXY(4, 3),
+  STOP()
+};
+#undef STATSXY

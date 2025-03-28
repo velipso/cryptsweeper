@@ -109,3 +109,5 @@ extern const u16 ani_statscol[];
 extern const u16 ani_statsper[];
 extern const u16 ani_statstime[];
 extern const u16 ani_statsseed[];
+
+extern const u16 ani_ufo[];

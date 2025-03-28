@@ -827,6 +827,7 @@ static void tile_update(i32 x, i32 y) {
 }
 
 static void set_peek(bool f) {
+  if (g_peek == f) return;
   g_peek = f;
   for (i32 y = 0; y < BOARD_H; y++) {
     for (i32 x = 0; x < BOARD_W; x++) {
@@ -1258,7 +1259,6 @@ static void popup_cheat() {
   if (g_cheat != was_cheating) {
     play_song(SONG_MAIN, true);
   }
-  set_peek(g_cheat ? g_peek : false);
 }
 
 static i32 popup_newgame() {
@@ -1807,8 +1807,8 @@ start_game:
         hint_cooldown = 0;
         hint_cooldown_max = 15;
       }
-      if (g_cheat && (g_hit & SYS_INPUT_ZR)) {
-        set_peek(!g_peek);
+      if (g_cheat) {
+        set_peek(!!(g_down & SYS_INPUT_ZR));
       }
       if (g_hit & SYS_INPUT_U) {
         move_game_cursor(0, -1);
@@ -1856,6 +1856,7 @@ start_game:
         }
       } else if (g_hit & SYS_INPUT_ST) {
         g_time = false;
+        set_peek(false);
         i32 p = pause_menu();
         if (p >= 0 && p < 0x100) {
           // new game
@@ -2134,7 +2135,8 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_DRAW: return DRAW(5, 1, 2);
         case BI_CHECK:
           CHECKG();
-          return count_dead(T_LV9, 10);
+          // you can't actually leave a lv9 dead because they drop required hearts
+          return game->difficulty == 4 ? 10 : 0;
         case BI_CLICK: return book_click_img1(scr_book_lv9_o);
       }
       break;
@@ -2170,7 +2172,8 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_DRAW: return DRAW(9, 1, 1);
         case BI_CHECK:
           CHECKG();
-          return count_dead(T_LAVA, 1) ? 0 : 10; // award mines if we *didn't* blow them up
+          // award mines if we *didn't* blow them up
+          return count_dead(T_LAVA, 1) ? 0 : 10;
         case BI_CLICK: return book_click_img1(scr_book_mine_o);
       }
       break;
@@ -2188,11 +2191,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_DRAW: return DRAW(1, 2, 1);
         case BI_CHECK:
           CHECKG();
-          return (
-            count_dead(T_CHEST_HEAL, 10) +
-            count_dead(T_CHEST_EYE2, 10) +
-            count_dead(T_CHEST_EXP, 10)
-          );
+          return game->difficulty >= 3 && game->difficulty <= 4 ? 10 : 0;
         case BI_CLICK: return book_click_img1(scr_book_chest_o);
       }
       break;
@@ -2207,35 +2206,35 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
       break;
     case B_EASY:
       switch (action) {
-        case BI_DRAW: return DRAW(3, 2, 0);
+        case BI_DRAW: return DRAW(3, 2, 3);
         case BI_CHECK: return game->difficulty == 0 ? 999 : 0;
         case BI_CLICK: return book_click_img1(scr_how1_o);
       }
       break;
     case B_MILD:
       switch (action) {
-        case BI_DRAW: return DRAW(4, 2, 1);
+        case BI_DRAW: return DRAW(4, 2, 3);
         case BI_CHECK: return game->difficulty == 1 ? 999 : 0;
         case BI_CLICK: return book_click_img1(scr_how1_o);
       }
       break;
     case B_NORMAL:
       switch (action) {
-        case BI_DRAW: return DRAW(5, 2, 0);
+        case BI_DRAW: return DRAW(5, 2, 3);
         case BI_CHECK: return game->difficulty == 2 ? 999 : 0;
         case BI_CLICK: return book_click_img1(scr_how1_o);
       }
       break;
     case B_HARD:
       switch (action) {
-        case BI_DRAW: return DRAW(6, 2, 1);
+        case BI_DRAW: return DRAW(6, 2, 3);
         case BI_CHECK: return game->difficulty == 3 ? 999 : 0;
         case BI_CLICK: return book_click_img1(scr_how1_o);
       }
       break;
     case B_EXPERT:
       switch (action) {
-        case BI_DRAW: return DRAW(7, 2, 0);
+        case BI_DRAW: return DRAW(7, 2, 3);
         case BI_CHECK: return game->difficulty == 4 ? 999 : 0;
         case BI_CLICK: return book_click_img1(scr_how1_o);
       }
@@ -2254,8 +2253,26 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CLICK: {
           popup_cheat();
           if (g_cheat) {
-            // TODO: show how to cheat
-            book_click_img1(scr_how1_o);
+            g_sprites[S_PART_START].pc = ani_ufo;
+            g_sprites[S_PART_START].origin.x = 0;
+            g_sprites[S_PART_START].origin.y = 0;
+            book_click_start();
+            load_scr_raw(BINADDR(scr_cheat_o), BINSIZE(scr_cheat_o), true);
+            sys_set_bg_config(
+              2, // background #
+              0, // priority
+              0, // tile start
+              0, // mosaic
+              1, // 256 colors
+              0x1e, // map start
+              0, // wrap
+              SYS_BGT_SIZE_256X256
+            );
+            palette_fadefromblack();
+            waitstart();
+            palette_fadetoblack();
+            g_sprites[S_PART_START].pc = NULL;
+            book_click_end();
           }
           return 0;
         }

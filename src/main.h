@@ -26,6 +26,7 @@ BINFILE(scr_wingame_o);
 BINFILE(scr_how1_o);
 BINFILE(scr_how2_o);
 BINFILE(scr_how3_o);
+BINFILE(scr_cheat_o);
 BINFILE(scr_book_items1_o);
 BINFILE(scr_book_items2_o);
 BINFILE(scr_book_lowlevel_o);

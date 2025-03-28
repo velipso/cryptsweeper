@@ -887,6 +887,9 @@ static void exp_update(i32 cur, i32 max) {
 }
 
 static void you_lose(i32 x, i32 y) {
+  if (!(saveroot.game.difficulty & D_ONLYMINES)) {
+    sfx_youdie();
+  }
   g_time = false;
   play_song(SONG_FAILURE, false);
   cursor_hide();
@@ -1038,6 +1041,27 @@ static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
     case EV_YOU_LOSE:    you_lose(x, y);    break;
     case EV_YOU_WIN:     you_win();         break;
     case EV_WAIT:        for (i32 i = 0; i < x; i++) nextframe(); break;
+    case EV_SFX:
+      switch (x) {
+        case SFX_BUMP  : sfx_bump  (); break;
+        case SFX_EYE   : sfx_eye   (); break;
+        case SFX_CHEST : sfx_chest (); break;
+        case SFX_WALL  : sfx_wall  (); break;
+        case SFX_EXP1  : sfx_exp1  (); break;
+        case SFX_EXP2  : sfx_exp2  (); break;
+        case SFX_GRUNT1: sfx_grunt1(); break;
+        case SFX_GRUNT2: sfx_grunt2(); break;
+        case SFX_GRUNT3: sfx_grunt3(); break;
+        case SFX_GRUNT4: sfx_grunt4(); break;
+        case SFX_GRUNT5: sfx_grunt5(); break;
+        case SFX_GRUNT6: sfx_grunt6(); break;
+        case SFX_GRUNT7: sfx_grunt7(); break;
+        case SFX_EXIT  : sfx_exit  (); break;
+        case SFX_HEART : sfx_heart (); break;
+        case SFX_MINE  : sfx_mine  (); break;
+        case SFX_DIRT  : sfx_dirt  (); break;
+      }
+      break;
     case EV_DEBUGLOG:    sys_print("[%x] value %x", x, y); break;
   }
 }
@@ -1178,6 +1202,7 @@ static void draw_books() {
 }
 
 static void popup_show(i32 popup_index, i32 height) {
+  sfx_swipeup();
   height &= ~7;
   const void *popup_addr = BINADDR(popups_bin);
   popup_addr += 8 * 512 * popup_index;
@@ -1193,6 +1218,7 @@ static void popup_show(i32 popup_index, i32 height) {
 }
 
 static void popup_hide(i32 height) {
+  sfx_swipedown();
   height &= ~7;
   for (i32 i = height; i >= -64; i -= 8) {
     g_sprites[S_POPUP].origin.y = i;
@@ -1202,20 +1228,22 @@ static void popup_hide(i32 height) {
 }
 
 static i32 popup_delete() {
-  popup_show(30, 72);
+  popup_show(30, 60);
   g_sprites[S_POPUPCUR].pc = ani_arrowr2;
   g_sprites[S_POPUPCUR].origin.x = 97;
   i32 menu = 0;
   for (;;) {
-    g_sprites[S_POPUPCUR].origin.y = 90 + menu * 9;
+    g_sprites[S_POPUPCUR].origin.y = 74 + menu * 9;
     nextframe();
     if (g_hit & SYS_INPUT_U) {
       if (menu > 0) {
         menu--;
+        sfx_blip();
       }
     } else if (g_hit & SYS_INPUT_D) {
       if (menu < 1) {
         menu++;
+        sfx_blip();
       }
     } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
       break;
@@ -1224,26 +1252,33 @@ static i32 popup_delete() {
       break;
     }
   }
+  if (menu == 1) {
+    sfx_accept();
+  } else {
+    sfx_reject();
+  }
   g_sprites[S_POPUPCUR].pc = NULL;
-  popup_hide(72);
+  popup_hide(60);
   return menu;
 }
 
 static void popup_cheat() {
-  popup_show(32, 72);
+  popup_show(32, 60);
   g_sprites[S_POPUPCUR].pc = ani_arrowr2;
   g_sprites[S_POPUPCUR].origin.x = 97;
   i32 menu = g_cheat ? 1 : 0;
   for (;;) {
-    g_sprites[S_POPUPCUR].origin.y = 83 + menu * 9;
+    g_sprites[S_POPUPCUR].origin.y = 67 + menu * 9;
     nextframe();
     if (g_hit & SYS_INPUT_U) {
       if (menu > 0) {
         menu--;
+        sfx_blip();
       }
     } else if (g_hit & SYS_INPUT_D) {
       if (menu < 1) {
         menu++;
+        sfx_blip();
       }
     } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
       break;
@@ -1253,7 +1288,12 @@ static void popup_cheat() {
     }
   }
   g_sprites[S_POPUPCUR].pc = NULL;
-  popup_hide(72);
+  if (menu) {
+    sfx_accept();
+  } else {
+    sfx_reject();
+  }
+  popup_hide(60);
   bool was_cheating = g_cheat;
   g_cheat = menu == 1;
   if (g_cheat != was_cheating) {
@@ -1272,18 +1312,22 @@ static i32 popup_newgame() {
     if (g_hit & SYS_INPUT_U) {
       if (difficulty > 0) {
         difficulty--;
+        sfx_blip();
       }
     } else if (g_hit & SYS_INPUT_D) {
       if (difficulty < 4) {
         difficulty++;
+        sfx_blip();
       }
     } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
       if ((g_down & SYS_INPUT_ZL) && (g_down & SYS_INPUT_ZR)) {
         difficulty |= D_ONLYMINES;
       }
+      sfx_accept();
       break;
     } else if (g_hit & SYS_INPUT_B) {
       difficulty = -1;
+      sfx_reject();
       break;
     }
   }
@@ -1377,6 +1421,7 @@ static void palette_fadetoblack() {
 }
 
 static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x100 = save+quit
+  sfx_slideup();
   cursor_hide();
   set_option_tiles();
   g_statsel_x = 0;
@@ -1411,6 +1456,7 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
       if (g_statsel_y > 0) {
         g_statsel_y--;
         cursor_to_statsel();
+        sfx_blip();
       } else {
         sfx_bump();
       }
@@ -1418,9 +1464,11 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
       if (g_statsel_y == 0 && g_statsel_x < 8) {
         g_statsel_x += 2;
         cursor_to_statsel();
+        sfx_blip();
       } else if (g_statsel_y > 0 && g_statsel_x < 9) {
         g_statsel_x++;
         cursor_to_statsel();
+        sfx_blip();
       } else {
         sfx_bump();
       }
@@ -1428,9 +1476,11 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
       if (g_statsel_y == 0) {
         g_statsel_y = 1;
         cursor_to_statsel();
+        sfx_blip();
       } else if (g_statsel_y < 3) {
         g_statsel_y++;
         cursor_to_statsel();
+        sfx_blip();
       } else {
         sfx_bump();
       }
@@ -1438,9 +1488,11 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
       if (g_statsel_y == 0 && g_statsel_x > 1) {
         g_statsel_x -= 2;
         cursor_to_statsel();
+        sfx_blip();
       } else if (g_statsel_y > 0 && g_statsel_x > 0) {
         g_statsel_x--;
         cursor_to_statsel();
+        sfx_blip();
       } else {
         sfx_bump();
       }
@@ -1452,9 +1504,11 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
         switch (g_statsel_x >> 1) {
           case 0: // save+quit
             cursor_hide();
+            sfx_accept();
             return 0x100;
           case 1: { // new game
             cursor_hide();
+            sfx_accept();
             i32 diff = popup_newgame();
             if (diff >= 0) {
               return diff;
@@ -1476,7 +1530,7 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
             if (v == 10) v = 0; else v++;
             saveroot.sfxvol = volume_map_fwd[v];
             snd_set_sfx_volume(saveroot.sfxvol);
-            sfx_bump();
+            sfx_accept();
             set_option_tiles();
             break;
           }
@@ -1484,6 +1538,7 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
             if (saveroot.brightness == 9) saveroot.brightness = 0;
             else saveroot.brightness++;
             palette_black(8);
+            sfx_accept();
             set_option_tiles();
             break;
         }
@@ -1501,6 +1556,7 @@ static i32 pause_menu() { // -1 for nothing, 0-0xff for new game difficulty, 0x1
     }
   }
   cursor_hide();
+  sfx_slidedown();
   pause_i--;
   for (i32 pos = -24; pause_i >= 0; pause_i--) {
     i32 amt = pause_move_amt[pause_i];
@@ -1538,24 +1594,39 @@ static i32 note_menu() {
   g_sprites[S_POPUP].origin.x = popx;
   g_sprites[S_POPUP].origin.y = popy;
   g_sprites[S_POPUPCUR].pc = ani_notecur;
+  sfx_accept();
   for (;;) {
     g_sprites[S_POPUPCUR].origin.x = popx + 1 + mx * 15;
     g_sprites[S_POPUPCUR].origin.y = popy + 2 + my * 14;
     nextframe();
     if (g_hit & SYS_INPUT_A) {
+      sfx_accept();
       break;
     } else if ((g_hit & SYS_INPUT_B) || (g_hit & SYS_INPUT_ST)) {
       mx = -1;
       my = 0;
+      sfx_reject();
       break;
     } else if (g_hit & SYS_INPUT_U) {
-      if (my > 0) my--;
+      if (my > 0) {
+        my--;
+        sfx_blip();
+      }
     } else if (g_hit & SYS_INPUT_R) {
-      if (mx < 3) mx++;
+      if (mx < 3) {
+        mx++;
+        sfx_blip();
+      }
     } else if (g_hit & SYS_INPUT_D) {
-      if (my < 3) my++;
+      if (my < 3) {
+        my++;
+        sfx_blip();
+      }
     } else if (g_hit & SYS_INPUT_L) {
-      if (mx > 0) mx--;
+      if (mx > 0) {
+        mx--;
+        sfx_blip();
+      }
     }
   }
   g_sprites[S_POPUP].pc = NULL;
@@ -1620,10 +1691,12 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
     if (g_hit & SYS_INPUT_U) {
       if (menu > 0) {
         menu--;
+        sfx_blip();
       }
     } else if (g_hit & SYS_INPUT_D) {
       if (menu < (valid_save ? has_file ? 2 : 1 : 0)) {
         menu++;
+        sfx_blip();
       }
     } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
       if (
@@ -1632,6 +1705,7 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
         (!has_file && menu == 1)
       )) { // delete?
         g_sprites[S_TITLE_START + 0].pc = NULL;
+        sfx_accept();
         bool del = !!popup_delete();
         g_sprites[S_TITLE_START + 0].pc = ani_arrowr;
         if (del) {
@@ -1644,11 +1718,13 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
         }
       } else if (valid_save && has_file && menu == 0) { // continue
         g_sprites[S_TITLE_START + 0].pc = NULL;
+        sfx_accept();
         palette_fadetoblack();
         menu = -1;
         break;
       } else { // new game
         g_sprites[S_TITLE_START + 0].pc = NULL;
+        sfx_accept();
         book_award(B_INTRO, 0);
         i32 diff = popup_newgame();
         if (diff < 0) {
@@ -1670,6 +1746,7 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
 }
 
 static void move_game_cursor(i32 dx, i32 dy) {
+  sfx_blip();
   cursor_to_gamesel_offset(dx, dy);
   nextframe();
   cursor_to_gamesel_offset(dx * 2, dy * 2);
@@ -1795,6 +1872,8 @@ start_game:
             case 2: // levelup
               if (!game_levelup(game, handler)) {
                 sfx_bump();
+              } else {
+                sfx_levelup();
               }
               break;
             default:
@@ -1822,6 +1901,7 @@ start_game:
         if (!(game->difficulty & D_ONLYMINES) && !levelup_cooldown) {
           if (game_levelup(game, handler)) {
             levelup_cooldown = 45;
+            sfx_levelup();
           } else {
             sfx_bump();
           }
@@ -1950,9 +2030,15 @@ static void book_award(enum book_enum book, i32 return_mode) {
     g_sprites[S_POPUPCUR].origin.x = 91 + menu * 30;
     nextframe();
     if (g_hit & SYS_INPUT_L) {
-      if (menu > 0) menu--;
+      if (menu > 0) {
+        menu--;
+        sfx_blip();
+      }
     } else if (g_hit & SYS_INPUT_R) {
-      if (menu < 1) menu++;
+      if (menu < 1) {
+        menu++;
+        sfx_blip();
+      }
     } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
       g_sprites[S_POPUPCUR].pc = NULL;
       popup_hide(40);
@@ -1986,8 +2072,10 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_DRAW: return DRAW(0, 0, 0);
         case BI_CHECK: return 0;
         case BI_CLICK:
+          sfx_accept();
           book_click_start();
           book_scr(scr_how1_o);
+          sfx_book();
           book_scr(scr_how2_o);
           book_scr(scr_how3_o);
           book_click_end();
@@ -2000,7 +2088,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return 1;
-        case BI_CLICK: return book_click_img2(scr_book_items1_o, scr_book_items2_o);
+        case BI_CLICK: sfx_book(); return book_click_img2(scr_book_items1_o, scr_book_items2_o);
       }
       break;
     case B_LOWLEVEL:
@@ -2012,7 +2100,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
             count_dead(T_LV1A, 1) +
             count_dead(T_LV2, 1)
           );
-        case BI_CLICK: return book_click_img1(scr_book_lowlevel_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lowlevel_o);
       }
       break;
     case B_LV1B:
@@ -2021,7 +2109,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV1B, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv1b_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv1b_o);
       }
       break;
     case B_LV3A:
@@ -2030,7 +2118,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV3A, 1);
-        case BI_CLICK: return book_click_img1(scr_book_lv3a_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv3a_o);
       }
       break;
     case B_LV3BC:
@@ -2046,7 +2134,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
             count_dead(T_ITEM_LV3C0, 5) +
             count_dead(T_ITEM_EXP9, 5)
           );
-        case BI_CLICK: return book_click_img1(scr_book_lv3bc_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv3bc_o);
       }
       break;
     case B_LV4A:
@@ -2055,7 +2143,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV4A, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv4a_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv4a_o);
       }
       break;
     case B_LV4B:
@@ -2064,7 +2152,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV4B, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv4b_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv4b_o);
       }
       break;
     case B_LV4C:
@@ -2073,7 +2161,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV4C, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv4c_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv4c_o);
       }
       break;
     case B_LV5A:
@@ -2082,7 +2170,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV5A, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv5a_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv5a_o);
       }
       break;
     case B_LV5B:
@@ -2091,7 +2179,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV5B, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv5b_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv5b_o);
       }
       break;
     case B_LV5C:
@@ -2100,7 +2188,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV5C, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv5c_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv5c_o);
       }
       break;
     case B_LV6:
@@ -2109,7 +2197,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV6, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv6_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv6_o);
       }
       break;
     case B_LV7:
@@ -2118,7 +2206,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV7, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv7_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv7_o);
       }
       break;
     case B_LV8:
@@ -2127,7 +2215,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV8, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv8_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv8_o);
       }
       break;
     case B_LV9:
@@ -2137,7 +2225,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
           CHECKG();
           // you can't actually leave a lv9 dead because they drop required hearts
           return game->difficulty == 4 ? 10 : 0;
-        case BI_CLICK: return book_click_img1(scr_book_lv9_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv9_o);
       }
       break;
     case B_LV10:
@@ -2146,7 +2234,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV10, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv10_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv10_o);
       }
       break;
     case B_LV11:
@@ -2155,7 +2243,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LV11, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lv11_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv11_o);
       }
       break;
     case B_LV13:
@@ -2164,7 +2252,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return 50;
-        case BI_CLICK: return book_click_img1(scr_book_lv13_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lv13_o);
       }
       break;
     case B_MINE:
@@ -2174,7 +2262,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
           CHECKG();
           // award mines if we *didn't* blow them up
           return count_dead(T_LAVA, 1) ? 0 : 10;
-        case BI_CLICK: return book_click_img1(scr_book_mine_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_mine_o);
       }
       break;
     case B_WALL:
@@ -2183,7 +2271,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return game->difficulty >= 2 && game->difficulty <= 4 ? 10 : 0;
-        case BI_CLICK: return book_click_img1(scr_book_wall_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_wall_o);
       }
       break;
     case B_CHEST:
@@ -2192,7 +2280,7 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return game->difficulty >= 3 && game->difficulty <= 4 ? 10 : 0;
-        case BI_CLICK: return book_click_img1(scr_book_chest_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_chest_o);
       }
       break;
     case B_LAVA:
@@ -2201,49 +2289,49 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
         case BI_CHECK:
           CHECKG();
           return count_dead(T_LAVA, 10);
-        case BI_CLICK: return book_click_img1(scr_book_lava_o);
+        case BI_CLICK: sfx_book(); return book_click_img1(scr_book_lava_o);
       }
       break;
     case B_EASY:
       switch (action) {
         case BI_DRAW: return DRAW(3, 2, 3);
         case BI_CHECK: return game->difficulty == 0 ? 999 : 0;
-        case BI_CLICK: return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
       }
       break;
     case B_MILD:
       switch (action) {
         case BI_DRAW: return DRAW(4, 2, 3);
         case BI_CHECK: return game->difficulty == 1 ? 999 : 0;
-        case BI_CLICK: return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
       }
       break;
     case B_NORMAL:
       switch (action) {
         case BI_DRAW: return DRAW(5, 2, 3);
         case BI_CHECK: return game->difficulty == 2 ? 999 : 0;
-        case BI_CLICK: return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
       }
       break;
     case B_HARD:
       switch (action) {
         case BI_DRAW: return DRAW(6, 2, 3);
         case BI_CHECK: return game->difficulty == 3 ? 999 : 0;
-        case BI_CLICK: return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
       }
       break;
     case B_EXPERT:
       switch (action) {
         case BI_DRAW: return DRAW(7, 2, 3);
         case BI_CHECK: return game->difficulty == 4 ? 999 : 0;
-        case BI_CLICK: return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
       }
       break;
     case B_ONLYMINES:
       switch (action) {
         case BI_DRAW: return DRAW(8, 2, 3);
         case BI_CHECK: return (game->difficulty & D_ONLYMINES) ? 999 : 0;
-        case BI_CLICK: return book_click_img1(scr_winmine_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_winmine_o);
       }
       break;
     case B_100:

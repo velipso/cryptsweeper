@@ -139,7 +139,28 @@ enum game_event {
   EV_YOU_LOSE,    // (x, y) tile that killed you
   EV_YOU_WIN,
   EV_WAIT,        // wait x number of frames
+  EV_SFX,         // (index)
   EV_DEBUGLOG     // (id, value)
+};
+
+enum game_event_sfx {
+  SFX_BUMP,
+  SFX_EYE,
+  SFX_CHEST,
+  SFX_WALL,
+  SFX_EXP1,
+  SFX_EXP2,
+  SFX_GRUNT1,
+  SFX_GRUNT2,
+  SFX_GRUNT3,
+  SFX_GRUNT4,
+  SFX_GRUNT5,
+  SFX_GRUNT6,
+  SFX_GRUNT7,
+  SFX_EXIT,
+  SFX_HEART,
+  SFX_MINE,
+  SFX_DIRT
 };
 
 typedef void (*game_handler_f)(struct game_st *game, enum game_event ev, i32 x, i32 y);

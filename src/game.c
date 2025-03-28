@@ -222,6 +222,7 @@ bool game_click(struct game_st *game, game_handler_f handler) {
         SET_STATUS(game->board[k], S_VISIBLE);
       } else {
         if (game->board[k] == T_EMPTY) {
+          handler(game, EV_SFX, SFX_DIRT, 0);
           handler(game, EV_PRESS_EMPTY, game->selx, game->sely);
         }
         SET_STATUS(game->board[k], S_PRESSED);
@@ -351,6 +352,7 @@ static i32 you_died(struct game_st *game, game_handler_f handler) {
 static void award_exp(struct game_st *game, game_handler_f handler, i32 amt) {
   game->totalexp += amt;
   game->exp += amt;
+  handler(game, EV_SFX, amt < 9 ? SFX_EXP1 : SFX_EXP2, 0);
   handler(game, EV_EXP_UPDATE, game->exp, max_exp(game));
 }
 
@@ -379,6 +381,27 @@ static i32 attack_monster(struct game_st *game, game_handler_f handler) {
     return you_died(game, handler);
   }
   game->hp -= exp;
+  switch (GET_TYPE(game->board[k])) {
+    case T_LV1A: handler(game, EV_SFX, SFX_GRUNT4, 0); break;
+    case T_LV1B: handler(game, EV_SFX, SFX_GRUNT5, 0); break;
+    case T_LV2 : handler(game, EV_SFX, SFX_GRUNT6, 0); break;
+    case T_LV3A: handler(game, EV_SFX, SFX_GRUNT1, 0); break;
+    case T_LV3B: handler(game, EV_SFX, SFX_GRUNT1, 0); break;
+    case T_LV3C: handler(game, EV_SFX, SFX_GRUNT1, 0); break;
+    case T_LV4A: handler(game, EV_SFX, SFX_GRUNT2, 0); break;
+    case T_LV4B: handler(game, EV_SFX, SFX_GRUNT2, 0); break;
+    case T_LV4C: handler(game, EV_SFX, SFX_GRUNT2, 0); break;
+    case T_LV5A: handler(game, EV_SFX, SFX_GRUNT4, 0); break;
+    case T_LV5B: handler(game, EV_SFX, SFX_GRUNT4, 0); break;
+    case T_LV5C: handler(game, EV_SFX, SFX_GRUNT3, 0); break;
+    case T_LV6 : handler(game, EV_SFX, SFX_GRUNT2, 0); break;
+    case T_LV7 : handler(game, EV_SFX, SFX_GRUNT2, 0); break;
+    case T_LV8 : handler(game, EV_SFX, SFX_GRUNT2, 0); break;
+    case T_LV9 : handler(game, EV_SFX, SFX_GRUNT3, 0); break;
+    case T_LV10: handler(game, EV_SFX, SFX_GRUNT5, 0); break;
+    case T_LV11: break;
+    case T_LV13: handler(game, EV_SFX, SFX_GRUNT7, 0); break;
+  }
   handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
   return 0;
 }
@@ -598,8 +621,12 @@ static i32 tile_info(
       switch (action) {
         case TI_ICON: return TILE(64, 16);
         case TI_THREAT: return 0x100;
-        case TI_COLLECT: return you_died(game, handler);
-        case TI_ATTACK: return you_died(game, handler);
+        case TI_COLLECT:
+          handler(game, EV_SFX, SFX_MINE, 0);
+          return you_died(game, handler);
+        case TI_ATTACK:
+          handler(game, EV_SFX, SFX_MINE, 0);
+          return you_died(game, handler);
       }
       break;
     case T_WALL:
@@ -608,9 +635,11 @@ static i32 tile_info(
         case TI_THREAT: return 0;
         case TI_COLLECT: {
           if (game->hp <= 0) {
+            handler(game, EV_SFX, SFX_BUMP, 0);
             return -1;
           }
           // spend extra health for exp
+          handler(game, EV_SFX, SFX_WALL, 0);
           i32 item = T_EMPTY;
           if (game->hp >= 6) {
             game->hp -= 6;
@@ -634,7 +663,9 @@ static i32 tile_info(
       switch (action) {
         case TI_ICON: return TILE(208, 96);
         case TI_THREAT: return 0;
-        case TI_COLLECT: return replace_type(game, handler, T_ITEM_HEAL);
+        case TI_COLLECT:
+          handler(game, EV_SFX, SFX_CHEST, 0);
+          return replace_type(game, handler, T_ITEM_HEAL);
         case TI_ATTACK: return 0;
       }
       break;
@@ -642,7 +673,9 @@ static i32 tile_info(
       switch (action) {
         case TI_ICON: return TILE(208, 96);
         case TI_THREAT: return 0;
-        case TI_COLLECT: return replace_type(game, handler, T_ITEM_EYE2);
+        case TI_COLLECT:
+          handler(game, EV_SFX, SFX_CHEST, 0);
+          return replace_type(game, handler, T_ITEM_EYE2);
         case TI_ATTACK: return 0;
       }
       break;
@@ -650,7 +683,9 @@ static i32 tile_info(
       switch (action) {
         case TI_ICON: return TILE(208, 96);
         case TI_THREAT: return 0;
-        case TI_COLLECT: return replace_type(game, handler, T_ITEM_EXP5);
+        case TI_COLLECT:
+          handler(game, EV_SFX, SFX_CHEST, 0);
+          return replace_type(game, handler, T_ITEM_EXP5);
         case TI_ATTACK: return 0;
       }
       break;
@@ -660,6 +695,7 @@ static i32 tile_info(
         case TI_THREAT: return 0;
         case TI_COLLECT:
           game->hp = max_hp(game);
+          handler(game, EV_SFX, SFX_HEART, 0);
           handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
           return replace_type(game, handler, T_EMPTY);
         case TI_ATTACK: return 0;
@@ -670,6 +706,7 @@ static i32 tile_info(
         case TI_ICON: return TILE(16, 112);
         case TI_THREAT: return 0;
         case TI_COLLECT:
+          handler(game, EV_SFX, SFX_EYE, 0);
           for (i32 dy = -2; dy <= 2; dy++) {
             i32 w = dy == 0 ? 2 : dy == 1 || dy == -1 ? 1 : 0;
             for (i32 dx = -w; dx <= w; dx++) {
@@ -685,6 +722,7 @@ static i32 tile_info(
         case TI_ICON: return TILE(16, 112);
         case TI_THREAT: return 0;
         case TI_COLLECT: {
+          handler(game, EV_SFX, SFX_EYE, 0);
           // we want to find the best spot to reveal, so we will score each location
           i32 best_score = 0;
           i32 best_x = 0;
@@ -752,6 +790,7 @@ static i32 tile_info(
         case TI_ICON: return TILE(32, 112);
         case TI_THREAT: return 0;
         case TI_COLLECT:
+          handler(game, EV_SFX, SFX_EYE, 0);
           for (i32 y = 0, k = 0; y < BOARD_H; y++) {
             for (i32 x = 0; x < BOARD_W; x++, k++) {
               if (GET_TYPE(game->board[k]) == T_LV1A) {
@@ -768,15 +807,16 @@ static i32 tile_info(
         case TI_ICON: return TILE(48, 112);
         case TI_THREAT: return 0;
         case TI_COLLECT:
-        for (i32 y = 0, k = 0; y < BOARD_H; y++) {
-          for (i32 x = 0; x < BOARD_W; x++, k++) {
-            i32 t = GET_TYPE(game->board[k]);
-            if (t == T_LV5A || t == T_LV8) {
-              reveal(game, handler, x, y);
+          handler(game, EV_SFX, SFX_EYE, 0);
+          for (i32 y = 0, k = 0; y < BOARD_H; y++) {
+            for (i32 x = 0; x < BOARD_W; x++, k++) {
+              i32 t = GET_TYPE(game->board[k]);
+              if (t == T_LV5A || t == T_LV8) {
+                reveal(game, handler, x, y);
+              }
             }
           }
-        }
-        return replace_type(game, handler, T_EMPTY);
+          return replace_type(game, handler, T_EMPTY);
         case TI_ATTACK: return 0;
       }
       break;
@@ -875,6 +915,7 @@ static i32 tile_info(
         case TI_THREAT: return 0;
         case TI_COLLECT:
           game->win = 2;
+          handler(game, EV_SFX, SFX_EXIT, 0);
           handler(game, EV_YOU_WIN, 0, 0);
           return 0;
         case TI_ATTACK: return 0;

@@ -35,3 +35,4 @@ void sfx_youdie();
 void sfx_levelup();
 void sfx_mine();
 void sfx_dirt();
+void sfx_lava();

@@ -668,7 +668,7 @@ const u16 ani_lv13_f2[] = {
   STOP()
 };
 
-const u16 ani_gray1[] = {
+const u16 ani_brown1[] = {
   SOFTRESET(),
   SIZE_8x8(),
   TILEXY(104, 0),
@@ -676,10 +676,26 @@ const u16 ani_gray1[] = {
   WAIT(25),
   DESTROY()
 };
-const u16 ani_gray2[] = {
+const u16 ani_brown2[] = {
   SOFTRESET(),
   SIZE_8x8(),
   TILEXY(112, 0),
+  PRIORITY(1),
+  WAIT(25),
+  DESTROY()
+};
+const u16 ani_red1[] = {
+  SOFTRESET(),
+  SIZE_8x8(),
+  TILEXY(104, 8),
+  PRIORITY(1),
+  WAIT(25),
+  DESTROY()
+};
+const u16 ani_red2[] = {
+  SOFTRESET(),
+  SIZE_8x8(),
+  TILEXY(112, 8),
   PRIORITY(1),
   WAIT(25),
   DESTROY()

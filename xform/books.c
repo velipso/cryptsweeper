@@ -263,16 +263,6 @@ static struct row_st *row_tiles3(int pos1, int pos2, int pos3) {
   return row;
 }
 
-static struct row_st *row_tiles4(int pos1, int pos2, int pos3, int pos4) {
-  struct row_st *row = row_new(ROW_TILES);
-  row->u.tiles.size = 4;
-  row->u.tiles.pos[0] = pos1;
-  row->u.tiles.pos[1] = pos2;
-  row->u.tiles.pos[2] = pos3;
-  row->u.tiles.pos[3] = pos4;
-  return row;
-}
-
 static struct row_st *row_text(const char *text) {
   struct row_st *row = row_new(ROW_TEXT);
   snprintf(row->u.text, sizeof(row->u.text), "%s", text);
@@ -563,11 +553,6 @@ static void bk_tiles3(int pos1, int pos2, int pos3) {
   book_push(book_current, row_pad(-2));
 }
 
-static void bk_tiles4(int pos1, int pos2, int pos3, int pos4) {
-  book_push(book_current, row_tiles4(pos1, pos2, pos3, pos4));
-  book_push(book_current, row_pad(-2));
-}
-
 static void bk_text(const char *text) {
   book_push(book_current, row_text(text));
 }
@@ -759,7 +744,7 @@ int books_main(int argc, const char **argv) {
     bk_textu ("BANSHEE TWINS");
     bk_text  ("Level: 3");
     bk_pad   (3);
-    bk_tiles2(TPOS(160, 32), TPOS(176, 32));
+    bk_tiles3(TPOS(160, 32), TPOS(176, 32), TPOS(160, 32));
     bk_textu ("BANSHEE TRIPLETS");
     bk_text  ("Level: 3");
     bk_nextcolumn();

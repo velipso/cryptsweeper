@@ -118,7 +118,7 @@ void game_hover(struct game_st *game, game_handler_f handler, i32 x, i32 y) {
   game->sely = y;
   // hovering over lava?
   if (GET_TYPEXY(game->board, x, y) == T_LAVA) {
-    handler(game, EV_HOVER_LAVA, 0, 0);
+    handler(game, EV_HOVER_LAVA, x, y);
     if (game->hp == 0) {
       you_died(game, handler);
     } else {
@@ -381,27 +381,30 @@ static i32 attack_monster(struct game_st *game, game_handler_f handler) {
     return you_died(game, handler);
   }
   game->hp -= exp;
+  enum game_event_sfx grunt = SFX_GRUNT1;
   switch (GET_TYPE(game->board[k])) {
-    case T_LV1A: handler(game, EV_SFX, SFX_GRUNT4, 0); break;
-    case T_LV1B: handler(game, EV_SFX, SFX_GRUNT5, 0); break;
-    case T_LV2 : handler(game, EV_SFX, SFX_GRUNT6, 0); break;
-    case T_LV3A: handler(game, EV_SFX, SFX_GRUNT1, 0); break;
-    case T_LV3B: handler(game, EV_SFX, SFX_GRUNT1, 0); break;
-    case T_LV3C: handler(game, EV_SFX, SFX_GRUNT1, 0); break;
-    case T_LV4A: handler(game, EV_SFX, SFX_GRUNT2, 0); break;
-    case T_LV4B: handler(game, EV_SFX, SFX_GRUNT2, 0); break;
-    case T_LV4C: handler(game, EV_SFX, SFX_GRUNT2, 0); break;
-    case T_LV5A: handler(game, EV_SFX, SFX_GRUNT4, 0); break;
-    case T_LV5B: handler(game, EV_SFX, SFX_GRUNT4, 0); break;
-    case T_LV5C: handler(game, EV_SFX, SFX_GRUNT3, 0); break;
-    case T_LV6 : handler(game, EV_SFX, SFX_GRUNT2, 0); break;
-    case T_LV7 : handler(game, EV_SFX, SFX_GRUNT2, 0); break;
-    case T_LV8 : handler(game, EV_SFX, SFX_GRUNT2, 0); break;
-    case T_LV9 : handler(game, EV_SFX, SFX_GRUNT3, 0); break;
-    case T_LV10: handler(game, EV_SFX, SFX_GRUNT5, 0); break;
-    case T_LV11: break;
-    case T_LV13: handler(game, EV_SFX, SFX_GRUNT7, 0); break;
+    case T_LV1A: grunt = SFX_GRUNT4; break;
+    case T_LV1B: grunt = SFX_GRUNT5; break;
+    case T_LV2 : grunt = SFX_GRUNT6; break;
+    case T_LV3A: grunt = SFX_GRUNT1; break;
+    case T_LV3B: grunt = SFX_GRUNT1; break;
+    case T_LV3C: grunt = SFX_GRUNT1; break;
+    case T_LV4A: grunt = SFX_GRUNT2; break;
+    case T_LV4B: grunt = SFX_GRUNT2; break;
+    case T_LV4C: grunt = SFX_GRUNT2; break;
+    case T_LV5A: grunt = SFX_GRUNT4; break;
+    case T_LV5B: grunt = SFX_GRUNT4; break;
+    case T_LV5C: grunt = SFX_GRUNT3; break;
+    case T_LV6 : grunt = SFX_GRUNT2; break;
+    case T_LV7 : grunt = SFX_GRUNT2; break;
+    case T_LV8 : grunt = SFX_GRUNT2; break;
+    case T_LV9 : grunt = SFX_GRUNT3; break;
+    case T_LV10: grunt = SFX_GRUNT5; break;
+    case T_LV11: grunt = SFX_GRUNT1; break;
+    case T_LV13: grunt = SFX_GRUNT7; break;
+    default: break;
   }
+  handler(game, EV_SFX, grunt, 0);
   handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
   return 0;
 }
@@ -415,6 +418,7 @@ static i32 attack_monster_group(struct game_st *game, game_handler_f handler, i3
     return you_died(game, handler);
   }
   game->hp -= exp;
+  handler(game, EV_SFX, SFX_GRUNT1, 0);
   handler(game, EV_HP_UPDATE, game->hp, max_hp(game));
   i32 type = GET_TYPE(game->board[k]);
   SET_TYPE(game->board[k], T_EMPTY);
@@ -728,8 +732,8 @@ static i32 tile_info(
           i32 best_x = 0;
           i32 best_y = 0;
           i32 same_score = 0;
-          for (i32 y = 0; y < BOARD_H - 3; y++) {
-            for (i32 x = 0; x < BOARD_W - 3; x++) {
+          for (i32 y = 0; y < BOARD_H - 2; y++) {
+            for (i32 x = 0; x < BOARD_W - 2; x++) {
               // calculate score of revealing this location
               i32 score = 0;
               i32 minecount = 0;
@@ -874,7 +878,9 @@ static i32 tile_info(
       switch (action) {
         case TI_ICON: return TILE(192, 16);
         case TI_THREAT: return 0;
-        case TI_COLLECT: return replace_type(game, handler, T_EMPTY);
+        case TI_COLLECT:
+          handler(game, EV_SFX, SFX_REJECT, 0);
+          return replace_type(game, handler, T_EMPTY);
         case TI_ATTACK: return 0;
       }
       break;
@@ -882,7 +888,9 @@ static i32 tile_info(
       switch (action) {
         case TI_ICON: return TILE(192, 32);
         case TI_THREAT: return 0;
-        case TI_COLLECT: return replace_type(game, handler, T_EMPTY);
+        case TI_COLLECT:
+          handler(game, EV_SFX, SFX_REJECT, 0);
+          return replace_type(game, handler, T_EMPTY);
         case TI_ATTACK: return 0;
       }
       break;

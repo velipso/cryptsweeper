@@ -537,7 +537,7 @@ restart:
     for (i32 y = 2; y < BOARD_H - 2; y++) {
       for (i32 x = 2; x < BOARD_W - 2; x++) {
         if (
-          IS_EMPTY(board[x + y * BOARD_W]) &&
+          IS_EMPTYXY(board, x, y) &&
           // don't reveal big spider or higher
           count_tiles(board, x, y, -2, istile_lv5bplus) == 0 &&
           // exactly one wall

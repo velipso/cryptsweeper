@@ -326,7 +326,23 @@ static void place_particles_press(i32 x, i32 y) {
       (dx < 8 ? -1 : 1) * (roll(&g_rnd, 0x0040) + 0x0020),
       -0x0080,
       0x0008,
-      roll(&g_rnd, 2) ? ani_gray1 : ani_gray2
+      roll(&g_rnd, 2) ? ani_brown1 : ani_brown2
+    );
+  }
+}
+
+static void place_particles_lava(i32 x, i32 y) {
+  x = x * 16 + 8;
+  y = y * 16 + 3;
+  for (i32 i = 0; i < 15; i++) {
+    i32 dx = roll(&g_rnd, 16);
+    place_particle(
+      x + dx,
+      y + roll(&g_rnd, 16),
+      (dx < 8 ? -1 : 1) * (roll(&g_rnd, 0x0040) + 0x0020),
+      -0x0080,
+      0x0008,
+      roll(&g_rnd, 2) ? ani_red1 : ani_red2
     );
   }
 }
@@ -530,7 +546,7 @@ static void cursor_to_gamesel_offset(i32 dx, i32 dy) {
   g_sprites[S_CURSOR4].origin.y = g_cursor_y + 16;
 }
 
-static void cursor_to_gamesel() {
+static inline void cursor_to_gamesel() {
   cursor_to_gamesel_offset(0, 0);
 }
 
@@ -701,6 +717,7 @@ static void load_level(i32 diff, u32 seed) {
   saveroot.sec = 0;
   saveroot.cycles = 0;
   saveroot.cheated = 0;
+  g_peek = false;
   u32 group = seed & (GENERATE_SIZE - 1);
   sys_print("new game seed: %x, group: %x, diff: %x", seed, group, diff);
   const u8 *levels = BINADDR(levels_bin);
@@ -713,6 +730,7 @@ static void load_level(i32 diff, u32 seed) {
 }
 
 static void load_scr_raw(const void *addr, u32 size, bool showobj) {
+  g_lava_frame = -1;
   gfx_setmode(GFX_MODE_2I);
   gfx_showbg0(false);
   gfx_showbg1(false);
@@ -721,7 +739,6 @@ static void load_scr_raw(const void *addr, u32 size, bool showobj) {
   gfx_showbg3(false);
   gfx_showobj(showobj);
   sys_copy_tiles(0, 0, addr, size);
-  g_lava_frame = -1;
 }
 #define load_scr(a) load_scr_raw(BINADDR(a), BINSIZE(a), true)
 
@@ -741,6 +758,7 @@ static void tile_update(i32 x, i32 y) {
 
   if (g_peek) {
     saveroot.cheated = 1;
+    if (GET_TYPE(t) == T_LV11) frame = 1;
   }
 
   for (i32 king = 0; king < 4; king++) {
@@ -771,7 +789,6 @@ static void tile_update(i32 x, i32 y) {
         place_number(x, y, 0, -3);
       } else {
         if (g_peek) {
-          if (GET_TYPE(t) == T_LV11) frame = 1;
           place_answer(x, y, frame);
         } else {
           clear_answer(x, y);
@@ -991,8 +1008,13 @@ static void you_win() {
   if (game->difficulty & D_ONLYMINES) {
     load_scr(scr_winmine_o);
   } else {
-    // TODO: different end screens
-    load_scr(scr_wingame_o);
+    switch (game->difficulty) {
+      case 0: load_scr(scr_deasy_o); break;
+      case 1: load_scr(scr_dmild_o); break;
+      case 2: load_scr(scr_dnormal_o); break;
+      case 3: load_scr(scr_dhard_o); break;
+      case 4: load_scr(scr_dexpert_o); break;
+    }
   }
   draw_time_seed();
   palette_fadefromblack();
@@ -1036,8 +1058,15 @@ static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
     case EV_TILE_UPDATE: tile_update(x, y); break;
     case EV_HP_UPDATE:   hp_update(x, y);   break;
     case EV_EXP_UPDATE:  exp_update(x, y);  break;
-    case EV_SHOW_LAVA:   shake_screen();    break;
-    case EV_HOVER_LAVA:  shake_screen();    break;
+    case EV_SHOW_LAVA:
+      sfx_mine();
+      shake_screen();
+      break;
+    case EV_HOVER_LAVA:
+      sfx_lava();
+      place_particles_lava(x, y);
+      shake_screen();
+      break;
     case EV_YOU_LOSE:    you_lose(x, y);    break;
     case EV_YOU_WIN:     you_win();         break;
     case EV_WAIT:        for (i32 i = 0; i < x; i++) nextframe(); break;
@@ -1060,6 +1089,7 @@ static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
         case SFX_HEART : sfx_heart (); break;
         case SFX_MINE  : sfx_mine  (); break;
         case SFX_DIRT  : sfx_dirt  (); break;
+        case SFX_REJECT: sfx_reject(); break;
       }
       break;
     case EV_DEBUGLOG:    sys_print("[%x] value %x", x, y); break;
@@ -1636,7 +1666,6 @@ static i32 note_menu() {
 }
 
 static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
-  g_lava_frame = -1;
   load_scr(scr_title_o);
 
   load_savecopy();
@@ -2296,35 +2325,35 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
       switch (action) {
         case BI_DRAW: return DRAW(3, 2, 3);
         case BI_CHECK: return game->difficulty == 0 ? 999 : 0;
-        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_deasy_o);
       }
       break;
     case B_MILD:
       switch (action) {
         case BI_DRAW: return DRAW(4, 2, 3);
         case BI_CHECK: return game->difficulty == 1 ? 999 : 0;
-        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_dmild_o);
       }
       break;
     case B_NORMAL:
       switch (action) {
         case BI_DRAW: return DRAW(5, 2, 3);
         case BI_CHECK: return game->difficulty == 2 ? 999 : 0;
-        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_dnormal_o);
       }
       break;
     case B_HARD:
       switch (action) {
         case BI_DRAW: return DRAW(6, 2, 3);
         case BI_CHECK: return game->difficulty == 3 ? 999 : 0;
-        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_dhard_o);
       }
       break;
     case B_EXPERT:
       switch (action) {
         case BI_DRAW: return DRAW(7, 2, 3);
         case BI_CHECK: return game->difficulty == 4 ? 999 : 0;
-        case BI_CLICK: sfx_accept(); return book_click_img1(scr_how1_o);
+        case BI_CLICK: sfx_accept(); return book_click_img1(scr_dexpert_o);
       }
       break;
     case B_ONLYMINES:

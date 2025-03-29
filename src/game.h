@@ -160,7 +160,8 @@ enum game_event_sfx {
   SFX_EXIT,
   SFX_HEART,
   SFX_MINE,
-  SFX_DIRT
+  SFX_DIRT,
+  SFX_REJECT
 };
 
 typedef void (*game_handler_f)(struct game_st *game, enum game_event ev, i32 x, i32 y);

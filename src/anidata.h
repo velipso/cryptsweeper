@@ -84,8 +84,10 @@ extern const u16 ani_lv10_f2[];
 extern const u16 ani_lv13_f1[];
 extern const u16 ani_lv13_f2[];
 
-extern const u16 ani_gray1[];
-extern const u16 ani_gray2[];
+extern const u16 ani_brown1[];
+extern const u16 ani_brown2[];
+extern const u16 ani_red1[];
+extern const u16 ani_red2[];
 extern const u16 ani_explodeL[];
 extern const u16 ani_explodeR[];
 

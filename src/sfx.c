@@ -18,14 +18,14 @@ void sfx_slideup() {
   static int sfx = -2;
   if (sfx == -2)
     sfx = snd_find_wav("slideup");
-  snd_play_wav(sfx, 14, 10);
+  snd_play_wav(sfx, 8, 10);
 }
 
 void sfx_slidedown() {
   static int sfx = -2;
   if (sfx == -2)
     sfx = snd_find_wav("slidedown");
-  snd_play_wav(sfx, 14, 10);
+  snd_play_wav(sfx, 8, 10);
 }
 
 void sfx_blip() {
@@ -39,7 +39,7 @@ void sfx_accept() {
   static int sfx = -2;
   if (sfx == -2)
     sfx = snd_find_wav("accept");
-  snd_play_wav(sfx, 14, 10);
+  snd_play_wav(sfx, 12, 10);
 }
 
 void sfx_reject() {
@@ -74,7 +74,7 @@ void sfx_eye() {
   static int sfx = -2;
   if (sfx == -2)
     sfx = snd_find_wav("eye");
-  snd_play_wav(sfx, 10, 10);
+  snd_play_wav(sfx, 14, 10);
 }
 
 void sfx_chest() {
@@ -193,5 +193,12 @@ void sfx_dirt() {
   static int sfx = -2;
   if (sfx == -2)
     sfx = snd_find_wav("dirt");
+  snd_play_wav(sfx, 10, 10);
+}
+
+void sfx_lava() {
+  static int sfx = -2;
+  if (sfx == -2)
+    sfx = snd_find_wav("lava");
   snd_play_wav(sfx, 10, 10);
 }

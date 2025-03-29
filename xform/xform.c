@@ -97,7 +97,6 @@ static int fix_rom(const char *file) {
   { // pad with 0xff to the next power of 2
     fseek(fp, 0, SEEK_END);
     long size = ftell(fp);
-    printf("Original ROM size: %ldK\n", size >> 10);
 
     // round up to next power of 2
     long p = size;
@@ -108,6 +107,8 @@ static int fix_rom(const char *file) {
     p |= p >> 8;
     p |= p >> 16;
     p++;
+
+    printf("Original ROM size: %ldK, padding %ld bytes\n", size >> 10, p - size);
 
     while (size < p) {
       fputc(0xff, fp);

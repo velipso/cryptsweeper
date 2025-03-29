@@ -1091,6 +1091,11 @@ static void handler(struct game_st *game, enum game_event ev, i32 x, i32 y) {
         case SFX_DIRT  : sfx_dirt  (); break;
         case SFX_REJECT: sfx_reject(); break;
       }
+      if (x >= SFX_GRUNT1 && x <= SFX_GRUNT7) {
+        g_sprites[S_POPUPCUR].pc = ani_slash;
+        g_sprites[S_POPUPCUR].origin.x = saveroot.game.selx * 16 + 8;
+        g_sprites[S_POPUPCUR].origin.y = saveroot.game.sely * 16 + 3;
+      }
       break;
     case EV_DEBUGLOG:    sys_print("[%x] value %x", x, y); break;
   }

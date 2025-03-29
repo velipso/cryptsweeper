@@ -37,7 +37,7 @@ SOURCES_SCR := $(wildcard $(SCR)/*.png)
 
 DEFINES := -DSYS_GBA
 DEFINES += -D__GBA__
-DEFINES += -DSYS_PRINT
+#DEFINES += -DSYS_PRINT
 
 LIBS     := -lc
 INCLUDES := $(SYS)

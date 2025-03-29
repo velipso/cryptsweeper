@@ -63,6 +63,8 @@ extern void memset8(void *dest, u32 data, u32 bytecount);
 
 #ifdef SYS_PRINT
 void sys_print(const char *fmt, ...);
+#else
+#define sys_print(fmt, ...)
 #endif
 
 static inline void sys_set_bg_config(

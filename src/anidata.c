@@ -894,3 +894,19 @@ const u16 ani_ufo[] = {
   ADDX(1), ADDY(-1), WAIT(1), ADDX(1), WAIT(1),
   STOP()
 };
+
+const u16 ani_slash[] = {
+  RESET(),
+  SIZE_16x16(),
+  X(-8),
+  TILEXY( 64, 64), WAIT(1),
+  TILEXY( 80, 64), WAIT(1),
+  TILEXY( 96, 64), WAIT(1),
+  TILEXY(112, 64), WAIT(1), X(0),
+  TILEXY( 64, 80), WAIT(1), X(8),
+  TILEXY( 80, 80), WAIT(1),
+  TILEXY( 96, 80), WAIT(1),
+  TILEXY(112, 80), WAIT(1),
+  TILEXY( 64, 96), WAIT(1),
+  DESTROY()
+};

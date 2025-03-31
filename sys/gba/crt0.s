@@ -36,7 +36,7 @@ entrypoint:
     .byte   0x21, 0xd4, 0xf8, 0x07
 
     // game title (12 characters, padded with 0)
-    .ascii  "CRYPTSWEEPER"
+    .ascii  "CRYPTSWEEP00"
 
     // game code, maker code
     .ascii  "CAFE77"

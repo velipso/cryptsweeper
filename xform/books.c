@@ -659,7 +659,7 @@ int books_main(int argc, const char **argv) {
     bk_tiles1(TPOS2(16, 112));
     bk_pad   (-2);
     bk_textu ("LANTERN");
-    bk_text  ("Show area of the map");
+    bk_text  ("Reveal hidden areas");
     bk_tiles1(TPOS2(32, 112));
     bk_pad   (-2);
     bk_textu ("SPYDER GLASS");
@@ -732,8 +732,7 @@ int books_main(int argc, const char **argv) {
     bk_nextcolumn();
     bk_para(
       "Randomly placed and eager to practice her piercing screams on you.\n\n"
-      "She's already loud enough solo, don't wait around for the rest of her spectral family "
-      "reunion!"
+      "She's already loud enough solo, don't wait around for the rest of her spectral sisters!"
     );
     bk_finish();
   }
@@ -830,8 +829,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 5");
     bk_nextcolumn();
     bk_para(
-      "Randomly placed, this sneaky hag conceals enemy counts in a diamond around her.\n\n"
-      "Defeat her to clear the fog of war - and her terrible cooking!"
+      "Randomly placed, this sneaky hag casts a spell to hide enemy counts in a diamond shape "
+      "around her. Is it magic - or just really bad swamp breath?\n\n"
+      "Defeat her to blow away her magical myst, and clear up the graveyard!"
     );
     bk_finish();
   }
@@ -870,9 +870,9 @@ int books_main(int argc, const char **argv) {
     bk_text  ("Level: 8");
     bk_nextcolumn();
     bk_para(
-      "Always placed protectively around their mummy overlord, these overly-serious guardians "
-      "patrol tirelessly.\n\n"
-      "Send them packing back to the underworld - someone needs to lighten up that afterlife!"
+      "Always placed protectively around their mummy overlord, these loyal pups patrol straight "
+      "from the underworld.\n\n"
+      "Send them running back home - I guess all dogs don't go to heaven!"
     );
     bk_finish();
   }
@@ -975,7 +975,7 @@ int books_main(int argc, const char **argv) {
       "Randomly scattered around the graveyard.\n\n"
       "One lucky chest holds a precious lantern, three others hide 5 EXP each, and the rest "
       "generously offer hearts.\n\n"
-      "Open carefully - treasure hunting has never felt so spooky!"
+      "Open carefully, treasure hunting has never felt so treacherous!"
     );
     bk_finish();
   }
@@ -992,7 +992,7 @@ int books_main(int argc, const char **argv) {
     bk_nextcolumn();
     bk_para(
       "Once you collect Dracula's Ire, lava floods the board, consuming all mines.\n\n"
-      "It leaves behind bubbling pools with enemy counts - but don't hover over them with your "
+      "It leaves behind bubbling pools with enemy counts - don't hover over them with your "
       "cursor, or you'll take 1 HP of sizzling regret!"
     );
     bk_finish();
@@ -1003,7 +1003,7 @@ int books_main(int argc, const char **argv) {
     bk_start(outputdir, "how2");
     bk_nextcolumn();
     bk_para(
-      "Zero hearts is okay - just don't drop below!\n\n"
+      "Zero hearts is safe - just don't take more hits!\n\n"
       "Defeat Death to win.\n\n"
       "Kill monsters, collect EXP, and level up to stay alive!\n\n"
       "Enemies follow patterns - keep playing to learn them!"
@@ -1027,6 +1027,30 @@ int books_main(int argc, const char **argv) {
       "L.Beethoven - Moonlight Sonata\n"
       "Adigun Polack - AAP-64 Palette"
     );
+    bk_finish();
+  }
+  #endif
+
+  #if 0
+  {
+    bk_start(outputdir, "story");
+    book_current->column[0].x = 16;
+    book_current->column[0].y = 12;
+    book_current->column[0].w = 95 * 2;
+    book_current->column[0].h = 130;
+    bk_text("Death is sick of working and ready to retire - he");
+    bk_text("found a loophole: no humans, no job! Stop him");
+    bk_text("before humanity clocks out forever!");
+    bk_text("1: Death sighs - retirement denied.");
+    bk_text("Maybe he'll read the fine print next time.");
+    bk_text("2: Death defeated - loophole officially closed.");
+    bk_text("Back to work... forever!");
+    bk_text("3: Death falls, taking his creepy crew down with him.");
+    bk_text("Retirement denied - looks like eternity got even longer!");
+    bk_text("4: Death collapses - his eerie entourage reduced to rubble.");
+    bk_text("Clock back in for eternity, the afterlife is understaffed!");
+    bk_text("5: You crushed Death and his full monstrous mob!");
+    bk_text("Looks like eternity's his day job now.");
     bk_finish();
   }
   #endif

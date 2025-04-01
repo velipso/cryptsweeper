@@ -643,33 +643,41 @@ static void place_expicons(u8 cur, u8 max) {
   g_showing_levelup = false;
   const i32 exp_x = 135;
   const i32 exp_y = 149;
+  #define EXP_SPRITE(bg)  (                \
+    exp_i < max                            \
+    ? exp_i < cur                          \
+    ? (bg ? ani_expfull2 : ani_expfull)    \
+    : (bg ? ani_expempty2 : ani_expempty)  \
+    : NULL                                 \
+  )
   if (cur < 13) {
     // put empty in the background
     i32 exp_i = 12;
     for (i32 i = 0; i < 13; i++, exp_i--) {
-      g_sprites[S_EXP_START + i].pc = exp_i < max ? exp_i < cur ? ani_expfull : ani_expempty : NULL;
+      g_sprites[S_EXP_START + i].pc = EXP_SPRITE(false);
       g_sprites[S_EXP_START + i].origin.x = exp_x + (12 - i) * 8;
       g_sprites[S_EXP_START + i].origin.y = exp_y + 2;
     }
     exp_i = 24;
     for (i32 i = 13; i < 25; i++, exp_i--) {
-      g_sprites[S_EXP_START + i].pc = exp_i < max ? ani_expempty : NULL;
+      g_sprites[S_EXP_START + i].pc = EXP_SPRITE(true);
       g_sprites[S_EXP_START + i].origin.x = exp_x + 4 + (24 - i) * 8;
       g_sprites[S_EXP_START + i].origin.y = exp_y;
     }
   } else {
     i32 exp_i = 24;
     for (i32 i = 0; i < 12; i++, exp_i--) {
-      g_sprites[S_EXP_START + i].pc = exp_i < max ? exp_i < cur ? ani_expfull : ani_expempty : NULL;
+      g_sprites[S_EXP_START + i].pc = EXP_SPRITE(false);
       g_sprites[S_EXP_START + i].origin.x = exp_x + 4 + (11 - i) * 8;
       g_sprites[S_EXP_START + i].origin.y = exp_y + 2;
     }
     for (i32 i = 12; i < 25; i++, exp_i--) {
-      g_sprites[S_EXP_START + i].pc = exp_i < max ? exp_i < cur ? ani_expfull : ani_expempty : NULL;
+      g_sprites[S_EXP_START + i].pc = EXP_SPRITE(true);
       g_sprites[S_EXP_START + i].origin.x = exp_x + (24 - i) * 8;
       g_sprites[S_EXP_START + i].origin.y = exp_y;
     }
   }
+  #undef EXP_SPRITE
 }
 
 static void place_expnum(u8 cur, u8 max) {
@@ -740,7 +748,8 @@ static void load_scr_raw(const void *addr, u32 size, bool showobj) {
   gfx_showobj(showobj);
   sys_copy_tiles(0, 0, addr, size);
 }
-#define load_scr(a) load_scr_raw(BINADDR(a), BINSIZE(a), true)
+#define load_scr(a)  load_scr_raw(BINADDR(a), BINSIZE(a), true)
+#define load_scr2(a) load_scr_raw(BINADDR(a), BINSIZE(a), false)
 
 static void book_scr_raw(const void *addr, u32 size) {
   load_scr_raw(addr, size, false);
@@ -856,30 +865,36 @@ static void set_peek(bool f) {
 static void hp_update(i32 cur, i32 max) {
   const i32 hp_x = 37;
   const i32 hp_y = 149;
-  #define HP_SPRITE  hp_i >= max ? NULL : hp_i < cur ? ani_hpfull : ani_hpempty
+  #define HP_SPRITE(bg)  (               \
+    hp_i >= max                          \
+    ? NULL                               \
+    : hp_i < cur                         \
+    ? (bg ? ani_hpfull2 : ani_hpfull)    \
+    : (bg ? ani_hpempty2 : ani_hpempty)  \
+  )
   if (cur <= 7) {
     // put empty in the background
     i32 hp_i = 6;
     for (i32 i = 0; i < 7; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = HP_SPRITE;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE(false);
       g_sprites[S_HP_START + i].origin.x = hp_x + (6 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y + 2;
     }
     hp_i = 12;
     for (i32 i = 7; i < 13; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = HP_SPRITE;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE(true);
       g_sprites[S_HP_START + i].origin.x = hp_x + 4 + (12 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y;
     }
   } else {
     i32 hp_i = 12;
     for (i32 i = 0; i < 6; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = HP_SPRITE;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE(false);
       g_sprites[S_HP_START + i].origin.x = hp_x + 4 + (5 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y + 2;
     }
     for (i32 i = 6; i < 13; i++, hp_i--) {
-      g_sprites[S_HP_START + i].pc = HP_SPRITE;
+      g_sprites[S_HP_START + i].pc = HP_SPRITE(true);
       g_sprites[S_HP_START + i].origin.x = hp_x + (12 - i) * 8;
       g_sprites[S_HP_START + i].origin.y = hp_y;
     }
@@ -923,7 +938,7 @@ static void hide_time_seed() {
   }
 }
 
-static void draw_time_seed() {
+static void draw_time_seed(bool classic) {
   const void *popup_addr = BINADDR(popups_bin);
   popup_addr += 8 * 512 * 33 + (saveroot.cheated ? 512 * 4 : 0);
   for (i32 i = 0; i < 4; i++, popup_addr += 512) {
@@ -931,7 +946,7 @@ static void draw_time_seed() {
   }
   i32 s = S_PART_START;
   i32 x = 78;
-  i32 y = 143;
+  i32 y = classic ? 143 : 8;
 
   #define PUSH(apc, dx)  do {     \
       g_sprites[s].pc = apc;      \
@@ -1006,19 +1021,33 @@ static void you_win() {
     g_sprites[S_KING1_BODY + king].pc = NULL;
   }
   if (game->difficulty & D_ONLYMINES) {
-    load_scr(scr_winmine_o);
+    load_scr2(scr_winmine_o);
+    draw_time_seed(true);
   } else {
     switch (game->difficulty) {
-      case 0: load_scr(scr_deasy_o); break;
-      case 1: load_scr(scr_dmild_o); break;
-      case 2: load_scr(scr_dnormal_o); break;
-      case 3: load_scr(scr_dhard_o); break;
-      case 4: load_scr(scr_dexpert_o); break;
+      case 0: load_scr2(scr_deasy_o); break;
+      case 1: load_scr2(scr_dmild_o); break;
+      case 2: load_scr2(scr_dnormal_o); break;
+      case 3: load_scr2(scr_dhard_o); break;
+      case 4: load_scr2(scr_dexpert_o); break;
+    }
+    draw_time_seed(false);
+  }
+  palette_fadefromblack();
+  {
+    bool show_time = false;
+    i32 delay = 30;
+    for (;;) {
+      nextframe();
+      if (delay > 0) delay--;
+      else if ((g_hit & SYS_INPUT_ST) || (g_hit & SYS_INPUT_A)) break;
+      bool should_show_time = (g_down & SYS_INPUT_ZL) || (g_down & SYS_INPUT_ZR);
+      if (should_show_time != show_time) {
+        show_time = should_show_time;
+        gfx_showobj(show_time);
+      }
     }
   }
-  draw_time_seed();
-  palette_fadefromblack();
-  waitstart();
   palette_fadetoblack();
   hide_time_seed();
   draw_level();

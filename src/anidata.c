@@ -211,10 +211,22 @@ const u16 ani_hpfull[] = {
   TILEXY(0, 16),
   STOP()
 };
+const u16 ani_hpfull2[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(80, 48),
+  STOP()
+};
 const u16 ani_hpempty[] = {
   RESET(),
   SIZE_8x8(),
   TILEXY(8, 16),
+  STOP()
+};
+const u16 ani_hpempty2[] = {
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(88, 48),
   STOP()
 };
 const u16 ani_hphalf[] = {
@@ -309,10 +321,22 @@ const u16 ani_expfull[] ={
   TILEXY(0, 24),
   STOP()
 };
+const u16 ani_expfull2[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(80, 56),
+  STOP()
+};
 const u16 ani_expempty[] ={
   RESET(),
   SIZE_8x8(),
   TILEXY(8, 24),
+  STOP()
+};
+const u16 ani_expempty2[] ={
+  RESET(),
+  SIZE_8x8(),
+  TILEXY(88, 56),
   STOP()
 };
 const u16 ani_exp0[] ={

@@ -1777,6 +1777,7 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
           saveroot.books = RESET_BOOKS;
           saveroot.game.win = 3;
           valid_save = false;
+          g_cheat = false;
           menu = 0;
         }
       } else if (valid_save && has_file && menu == 0) { // continue

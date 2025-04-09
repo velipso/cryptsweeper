@@ -97,6 +97,26 @@ static inline void sys_copy_tiles(
   memcpy32(((void *)0x06000000) + tilestart * 0x4000 + offset, src, size);
 }
 
+static inline void sys_copy32_tiles(
+  u32 tilestart, // matching sys_set_bg_config
+  u32 offset,
+  u32 data
+) {
+  u32 *ptr = ((void *)0x06000000) + tilestart * 0x4000 + offset;
+  *ptr = data;
+}
+
+static inline void sys_copy64_tiles(
+  u32 tilestart, // matching sys_set_bg_config
+  u32 offset,
+  u32 data1,
+  u32 data2
+) {
+  u32 *ptr = ((void *)0x06000000) + tilestart * 0x4000 + offset;
+  ptr[0] = data1;
+  ptr[1] = data2;
+}
+
 static inline void sys_copy_map(
   u32 mapstart, // matching sys_set_bg_config
   u32 offset,

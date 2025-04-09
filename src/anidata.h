@@ -71,13 +71,14 @@ extern const u16 ani_notecur[];
 extern const u16 ani_popup[];
 extern const u16 ani_arrowr[];
 extern const u16 ani_arrowr2[];
+extern const u16 ani_tutarrow[];
 
-extern const u16 ani_title_continue1[];
-extern const u16 ani_title_continue2[];
+extern const u16 ani_title_continue[];
 extern const u16 ani_title_newgame1[];
 extern const u16 ani_title_newgame2[];
-extern const u16 ani_title_delete1[];
-extern const u16 ani_title_delete2[];
+extern const u16 ani_title_tutorial[];
+extern const u16 ani_title_delete[];
+extern const u16 ani_title_credits[];
 
 extern const u16 ani_lv1b_f1[];
 extern const u16 ani_lv1b_f2[];

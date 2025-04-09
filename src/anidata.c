@@ -578,18 +578,28 @@ const u16 ani_arrowr2[] = {
   JUMP(-4),
   STOP()
 };
+extern const u16 ani_tutarrow[] = {
+  RESET(),
+  SIZE_16x16(),
+  TILEXY(80, 96),
+  X(2),
+  Y(-13),
+  WAIT(10),
+  ADDY(-1),
+  WAIT(8),
+  ADDY(-1),
+  WAIT(5),
+  ADDY(1),
+  WAIT(8),
+  ADDY(1),
+  JUMP(-8),
+  STOP()
+};
 
-const u16 ani_title_continue1[] = {
+const u16 ani_title_continue[] = {
   RESET(),
   SIZE_32x16(),
   TILEXY(64, 128),
-  STOP()
-};
-const u16 ani_title_continue2[] = {
-  RESET(),
-  SIZE_32x16(),
-  TILEXY(96, 128),
-  X(32),
   STOP()
 };
 const u16 ani_title_newgame1[] = {
@@ -605,17 +615,22 @@ const u16 ani_title_newgame2[] = {
   X(32),
   STOP()
 };
-const u16 ani_title_delete1[] = {
+const u16 ani_title_tutorial[] = {
+  RESET(),
+  SIZE_32x16(),
+  TILEXY(96, 128),
+  STOP()
+};
+const u16 ani_title_delete[] = {
   RESET(),
   SIZE_32x16(),
   TILEXY(64, 160),
   STOP()
 };
-const u16 ani_title_delete2[] = {
+const u16 ani_title_credits[] = {
   RESET(),
   SIZE_32x16(),
   TILEXY(96, 160),
-  X(32),
   STOP()
 };
 

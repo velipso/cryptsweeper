@@ -17,7 +17,7 @@
 #define S_POPUP        1
 // title sprites (can overlap with game sprites)
 #define S_TITLE_START  2
-#define S_TITLE_END    20
+#define S_TITLE_END    24
 // game sprites
 #define S_CURSOR1      2
 #define S_CURSOR2      3
@@ -130,6 +130,194 @@ static const u16 *const ani_statsX[] = {
   ani_stats8, ani_stats9, ani_statsA, ani_statsB,
   ani_statsC, ani_statsD, ani_statsE, ani_statsF
 };
+#define TU_XYZ(x, y, z)       ((x) | ((y) << 6) | ((z) << 12))
+#define TU_XY(x, y)           TU_XYZ(x, y, 0)
+#define TU_WAIT_NEXT(x, y)    TU_XYZ(x, y, 0)
+#define TU_WAIT_A(x, y)       TU_XYZ(x, y, 1)
+#define TU_WAIT_BMINE(x, y)   TU_XYZ(x, y, 2)
+#define TU_WAIT_BNUM2(x, y)   TU_XYZ(x, y, 3)
+#define TU_WAIT_SE(x, y)      TU_XYZ(x, y, 4)
+#define TU_WAIT_TIME(t)       TU_XYZ(t, 0, 5)
+#define TU_GETX(t)            ((t) & 63)
+#define TU_GETY(t)            (((t) >> 6) & 63)
+#define TU_GETZ(t)            (((t) >> 12) & 15)
+#define TU_TEXT_SAME          ((void *)1)
+static const struct {
+  const char *text;
+  const i16 arrow;
+  const u16 wait;
+} tutorial_steps[] SECTION_ROM = {
+  { "You play Crypt\nSweeper\x02 on\x02 a\ngrid with hidden\nmonsters.\n"
+    "\x02    A: Next\n\x03Start: Exit", -1, TU_WAIT_NEXT(22, 10) },
+  { "Begin the game\nby hitting A on\nthe lantern.", TU_XY(6, 2), TU_WAIT_A(8, 6) },
+  { "\x03""Some\x03 hidden\n\x03""monsters are\n\x03""now visible.", -1, TU_WAIT_NEXT(1, 6) },
+  { "You start with\n5 hearts.", TU_XY(2, 9), TU_WAIT_NEXT(5, 26) },
+  { "Kill the beetle\nwho is level 5.", TU_XY(7, 3), TU_WAIT_A(36, 14) },
+  { "", -2, TU_WAIT_TIME(6) },
+  { "\x03""Oh no!  That\n\x03""cost all your\n\x03""hearts!", TU_XY(2, 9), TU_WAIT_NEXT(5, 24) },
+  { "But\x02 now\x02 you\ncan collect the\nEXP that the\nbeetle dropped\nusing A.",
+    TU_XY(7, 3), TU_WAIT_A(36, 14) },
+  { "", -1, TU_WAIT_TIME(4) },
+  { "Look, now you\ncan level up by\nhitting Select.", TU_XY(9, 9), TU_WAIT_SE(32, 24) },
+  { "", -1, TU_WAIT_TIME(2) },
+  { "Your\x03 hearts\nwere restored\nby leveling up!", TU_XY(2, 9), TU_WAIT_NEXT(5, 24) },
+  { "Spend\x03 your\nhearts\x03 by\nkilling monsters\nand collecting\ntheir EXP.",
+    TU_XY(5, 3), TU_WAIT_A(1, 3) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(5, 3), TU_WAIT_A(1, 3) },
+  { TU_TEXT_SAME, TU_XY(4, 2), TU_WAIT_A(1, 3) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(4, 2), TU_WAIT_A(1, 3) },
+  { "Level up again.", TU_XY(9, 9), TU_WAIT_SE(32, 28) },
+  { "Your maximum\nhearts\x03 has\nincreased from\n5 to 6!", TU_XY(2, 9), TU_WAIT_NEXT(5, 22) },
+  { "", -1, TU_WAIT_TIME(6) },
+  { " What\x03 about\n the numbers\n on the dirt?", -1, TU_WAIT_NEXT(22, 21) },
+  { "They represent\nthe\x03 total\x03 of\nall surrounding\nmonsters.", -1, TU_WAIT_NEXT(22, 21) },
+  { "This dirt says\n8,\x03 and\x02 2\x02 is\nvisible, so the\nremaning grass\nmust contain 6",
+    TU_XY(5, 3), TU_WAIT_NEXT(16, 22) },
+  { "Since you have\n6 hearts,\x02 it's\nsafe to attack\nthe grass.",
+    TU_XY(4, 3), TU_WAIT_A(16, 22) },
+  { TU_TEXT_SAME, TU_XY(4, 4), TU_WAIT_A(16, 22) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(4, 4), TU_WAIT_A(16, 22) },
+  { TU_TEXT_SAME, TU_XY(5, 4), TU_WAIT_A(16, 22) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(5, 4), TU_WAIT_A(16, 22) },
+  { "Good job! You\nsafely cleared\nthe area. Now\nlevel up again.", -1, TU_WAIT_SE(32, 24) },
+  { "Kill the rest of\nthe monsters.", TU_XY(6, 4), TU_WAIT_A(36, 14) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(6, 4), TU_WAIT_A(16, 21) },
+  { TU_TEXT_SAME, TU_XY(5, 1), TU_WAIT_A(16, 21) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(5, 1), TU_WAIT_A(16, 21) },
+  { TU_TEXT_SAME, TU_XY(6, 1), TU_WAIT_A(16, 21) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(6, 1), TU_WAIT_A(16, 21) },
+  { TU_TEXT_SAME, TU_XY(8, 2), TU_WAIT_A(16, 21) },
+  { TU_TEXT_SAME, -2, TU_WAIT_TIME(0) },
+  { TU_TEXT_SAME, TU_XY(8, 2), TU_WAIT_A(16, 21) },
+  { "", -1, TU_WAIT_TIME(6) },
+  { "Oops, you don't\nhave any hearts\nleft,\x04 even\nthough\x03 you\nplayed perfect.",
+    TU_XY(2, 9), TU_WAIT_NEXT(5, 20) },
+  { "The chest can\nhelp.  Open\x02 it\nwith A to see\nwhat's inside.",
+    TU_XY(7, 2), TU_WAIT_A(36, 14) },
+  { "Oh\x03 good,\x04 a\nheart! This will\nrestore\x01 you\x01 to\nfull health.",
+    TU_XY(7, 2), TU_WAIT_A(36, 14) },
+  { "Now\x02 you\x02 can\nkeep playing...\nbut first, let's\nthink ahead.",
+    -1, TU_WAIT_NEXT(22, 10) },
+  { "The red dots\nshow\x03 nearby\nmines. You can\ndeduce\x03 there\nis a mine here.",
+    TU_XY(4, 1), TU_WAIT_NEXT(10, 14) },
+  { "Hover over the\ntile, hit B, and\nmark\x03 it\x03 with\n*\x03 so\x03 you\nremember.",
+    TU_XY(4, 1), TU_WAIT_BMINE(10, 14) },
+  { "\x02""You\x01 can\x01 also\n\x02""deduce\x03 this\n\x02""tile must be\n\x02"
+    "a\x03 level\x03 2\n\x02""monster.", TU_XY(7, 4), TU_WAIT_NEXT(36, 14) },
+  { " Mark it with\n a @ using B.", TU_XY(7, 4), TU_WAIT_BNUM2(36, 14) },
+  { "If\x03 you\x03 can\nlevel\x02 up\x02 high\nenough, you can\ndefeat Death!",
+    -1, TU_WAIT_NEXT(22, 5) },
+  { "But\x03 you\x03 will\nprobably\x03 die,\nuntil you figure\nout more tricks",
+    -1, TU_WAIT_NEXT(22, 5) },
+  { "Play more and\npay attention!\nMonsters are\ndifferent\x03 in\nsubtle ways.",
+    -1, TU_WAIT_NEXT(22, 5) },
+  { "Stick to Easy\nmode\x03 for\x03 a\nwhile.\n\n\x02  Good luck!", -1, TU_WAIT_NEXT(22, 5) },
+  { NULL, -1, 0 }
+};
+
+// x = pixel x
+// y = row
+// z = character width
+static const u16 tutorial_chars[] = {
+  0, // space
+  TU_XYZ(40, 4, 1), // !
+  0, // "
+  0, // #
+  0, // $
+  0, // %
+  0, // &
+  TU_XYZ(47, 4, 1), // '
+  0, // (
+  0, // )
+  TU_XYZ(45, 1, 8), // * "mine"
+  TU_XYZ(51, 4, 5), // +
+  TU_XYZ(46, 4, 1), // ,
+  TU_XYZ(48, 4, 3), // -
+  TU_XYZ(45, 4, 1), // .
+  0, // /
+  TU_XYZ( 0, 4, 4), // 0
+  TU_XYZ( 4, 4, 3), // 1
+  TU_XYZ( 7, 4, 4), // 2
+  TU_XYZ(11, 4, 4), // 3
+  TU_XYZ(15, 4, 4), // 4
+  TU_XYZ(19, 4, 4), // 5
+  TU_XYZ(23, 4, 4), // 6
+  TU_XYZ(27, 4, 4), // 7
+  TU_XYZ(31, 4, 4), // 8
+  TU_XYZ(35, 4, 4), // 9
+  TU_XYZ(39, 4, 1), // :
+  0, // ;
+  0, // <
+  0, // =
+  0, // >
+  TU_XYZ(41, 4, 4), // ?
+  TU_XYZ(53, 1, 7), // @ "2"
+  TU_XYZ( 0, 0, 4), // A
+  TU_XYZ( 4, 0, 4), // B
+  TU_XYZ( 8, 0, 4), // C
+  TU_XYZ(12, 0, 4), // D
+  TU_XYZ(16, 0, 4), // E
+  TU_XYZ(20, 0, 4), // F
+  TU_XYZ(24, 0, 4), // G
+  TU_XYZ(28, 0, 4), // H
+  TU_XYZ(32, 0, 3), // I
+  TU_XYZ(35, 0, 4), // J
+  TU_XYZ(39, 0, 4), // K
+  TU_XYZ(43, 0, 4), // L
+  TU_XYZ(47, 0, 5), // M
+  TU_XYZ(52, 0, 4), // N
+  TU_XYZ(56, 0, 4), // O
+  TU_XYZ(60, 0, 4), // P
+  TU_XYZ( 0, 1, 4), // Q
+  TU_XYZ( 4, 1, 4), // R
+  TU_XYZ( 8, 1, 4), // S
+  TU_XYZ(12, 1, 5), // T
+  TU_XYZ(17, 1, 4), // U
+  TU_XYZ(21, 1, 5), // V
+  TU_XYZ(26, 1, 5), // W
+  TU_XYZ(31, 1, 5), // X
+  TU_XYZ(36, 1, 5), // Y
+  TU_XYZ(41, 1, 4), // Z
+  0, // [
+  0, // \.
+  0, // ]
+  0, // ^
+  0, // _
+  0, // `
+  TU_XYZ( 0, 2, 3), // a
+  TU_XYZ( 3, 2, 3), // b
+  TU_XYZ( 6, 2, 3), // c
+  TU_XYZ( 9, 2, 3), // d
+  TU_XYZ(12, 2, 3), // e
+  TU_XYZ(15, 2, 2), // f
+  TU_XYZ(17, 2, 3), // g
+  TU_XYZ(20, 2, 3), // h
+  TU_XYZ(23, 2, 1), // i
+  TU_XYZ(24, 2, 3), // j
+  TU_XYZ(27, 2, 3), // k
+  TU_XYZ(30, 2, 1), // l
+  TU_XYZ(31, 2, 5), // m
+  TU_XYZ(36, 2, 3), // n
+  TU_XYZ(39, 2, 3), // o
+  TU_XYZ(42, 2, 3), // p
+  TU_XYZ(45, 2, 3), // q
+  TU_XYZ(48, 2, 2), // r
+  TU_XYZ(50, 2, 3), // s
+  TU_XYZ(53, 2, 3), // t
+  TU_XYZ(56, 2, 3), // u
+  TU_XYZ(59, 2, 3), // v
+  TU_XYZ( 0, 3, 5), // w
+  TU_XYZ( 5, 3, 3), // x
+  TU_XYZ( 8, 3, 3), // y
+  TU_XYZ(11, 3, 4)  // z
+};
 
 // map 0-10 -> 0-16
 static const u16 volume_map_fwd[] SECTION_ROM =
@@ -222,6 +410,7 @@ static inline void save_savecopy(bool del) {
   savecopy.checksum = calculate_checksum(&savecopy);
   if (del) {
     // if deleting, corrupt the checksum
+    savecopy.game.win = 2;
     savecopy.checksum ^= 0xaa55a5a5;
   }
   save_write(&savecopy, sizeof(struct save_st));
@@ -734,6 +923,28 @@ static void load_level(i32 diff, u32 seed) {
     game_new(game, diff, seed, levels + 128 * 5);
   } else {
     game_new(game, diff, seed, levels + 128 * diff);
+  }
+}
+
+static void load_tutorial() {
+  load_level(0, 10);
+  // stomp the level with hard-coded tutorial, in case the level generation changes
+  game->selx = 6;
+  game->sely = 2;
+  const u8 board[] = {
+    0x00, 0x00, 0x0b, 0x19, 0x0e, 0x05, 0x00, 0x00, 0x17, 0x02, 0x17, 0x00, 0x15, 0x02,
+    0x04, 0x05, 0x02, 0x0f, 0x15, 0x04, 0x02, 0x16, 0x16, 0x0f, 0x04, 0x08, 0x08, 0x02,
+    0x00, 0x00, 0x17, 0x05, 0x04, 0x00, 0x9b, 0x17, 0x02, 0x08, 0x08, 0x04, 0x17, 0x04,
+    0x00, 0x0e, 0x02, 0x04, 0x00, 0x05, 0x00, 0x0b, 0x05, 0x00, 0x0e, 0x00, 0x00, 0x0e,
+    0x0b, 0x0b, 0x08, 0x08, 0x05, 0x05, 0x04, 0x04, 0x15, 0x00, 0x19, 0x0b, 0x00, 0x00,
+    0x04, 0x15, 0x00, 0x0b, 0x15, 0x15, 0x00, 0x54, 0x15, 0x00, 0x0b, 0x16, 0x00, 0x15,
+    0x02, 0x17, 0x00, 0x0f, 0x00, 0x11, 0x00, 0x02, 0x11, 0x0f, 0x15, 0x16, 0x04, 0x0b,
+    0x00, 0x0e, 0x02, 0x16, 0x08, 0x0b, 0x10, 0x10, 0x10, 0x0c, 0x17, 0x00, 0x05, 0x18,
+    0x0b, 0x15, 0x19, 0x16, 0x08, 0x02, 0x10, 0x03, 0x10, 0x02, 0x17, 0x00, 0x0e, 0x12,
+    0, 0 // align to 32 bits
+  };
+  for (i32 i = 0; i < BOARD_SIZE; i++) {
+    game->board[i] = board[i];
   }
 }
 
@@ -1414,8 +1625,8 @@ static void set_option_tiles() {
   #undef SETNUM
 }
 
+static u16 palscratch[256];
 static void palette_black(i32 amt) {
-  u16 *pal = malloc(512);
   const u16 *inp = BINADDR(palette_brightness_bin) + saveroot.brightness * 512;
   for (i32 i = 0; i < 256; i++) {
     u16 c = inp[i];
@@ -1425,15 +1636,14 @@ static void palette_black(i32 amt) {
     r = (r * amt) >> 3;
     g = (g * amt) >> 3;
     b = (b * amt) >> 3;
-    pal[i] = r | (g << 5) | (b << 10);
+    palscratch[i] = r | (g << 5) | (b << 10);
   }
-  sys_copy_bgpal(0, pal, 512);
-  sys_copy_spritepal(0, pal, 512);
-  free(pal);
+  nextframe();
+  sys_copy_bgpal(0, palscratch, 512);
+  sys_copy_spritepal(0, palscratch, 512);
 }
 
 static void palette_white(i32 amt) {
-  u16 *pal = malloc(512);
   const u16 *inp = BINADDR(palette_brightness_bin) + saveroot.brightness * 512;
   for (i32 i = 0; i < 256; i++) {
     u16 c = inp[i];
@@ -1449,38 +1659,34 @@ static void palette_white(i32 amt) {
     r = 31 - r;
     g = 31 - g;
     b = 31 - b;
-    pal[i] = r | (g << 5) | (b << 10);
+    palscratch[i] = r | (g << 5) | (b << 10);
   }
-  sys_copy_bgpal(0, pal, 512);
-  sys_copy_spritepal(0, pal, 512);
-  free(pal);
+  nextframe();
+  sys_copy_bgpal(0, palscratch, 512);
+  sys_copy_spritepal(0, palscratch, 512);
 }
 
 static void palette_fadefromwhite() {
   for (i32 i = 0; i <= 8; i++) {
     palette_white(i);
-    nextframe();
   }
 }
 
 static void palette_fadetowhite() {
   for (i32 i = 8; i >= 0; i--) {
     palette_white(i);
-    nextframe();
   }
 }
 
 static void palette_fadefromblack() {
   for (i32 i = 0; i <= 8; i++) {
     palette_black(i);
-    nextframe();
   }
 }
 
 static void palette_fadetoblack() {
   for (i32 i = 8; i >= 0; i--) {
     palette_black(i);
-    nextframe();
   }
 }
 
@@ -1664,7 +1870,6 @@ static i32 note_menu() {
     g_sprites[S_POPUPCUR].origin.y = popy + 2 + my * 14;
     nextframe();
     if (g_hit & SYS_INPUT_A) {
-      sfx_accept();
       break;
     } else if ((g_hit & SYS_INPUT_B) || (g_hit & SYS_INPUT_ST)) {
       mx = -1;
@@ -1699,7 +1904,7 @@ static i32 note_menu() {
   return my * 4 + mx;
 }
 
-static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
+static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty, 0x100 = tutorial
   load_scr(scr_title_o);
 
   load_savecopy();
@@ -1714,7 +1919,7 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
 
   palette_fadefromwhite();
 
-  const i32 MENU_Y = 114;
+  const i32 MENU_Y = 113;
   const i32 MENU_X = 92;
 
   // cursor
@@ -1724,7 +1929,7 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
   i32 menu = 0;
 
   for (;;) {
-    g_sprites[S_TITLE_START + 0].origin.y = (MENU_Y - 5) + menu * 9;
+    g_sprites[S_TITLE_START + 0].origin.y = (MENU_Y - 4) + menu * 9;
     u32 next_spr = 1;
     #define ADDSPR(pc1, pc2)  do {                                   \
         i32 sy = MENU_Y + ((next_spr - 1) >> 1) * 9;                 \
@@ -1739,14 +1944,18 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
       } while (0)
     if (valid_save) {
       if (has_file) {
-        ADDSPR(ani_title_continue1, ani_title_continue2);
+        ADDSPR(ani_title_continue, NULL);
       }
       ADDSPR(ani_title_newgame1, ani_title_newgame2);
-      ADDSPR(ani_title_delete1, ani_title_delete2);
+      ADDSPR(ani_title_tutorial, NULL);
+      ADDSPR(ani_title_credits, NULL);
+      ADDSPR(ani_title_delete, NULL);
     } else {
       ADDSPR(ani_title_newgame1, ani_title_newgame2);
+      ADDSPR(ani_title_tutorial, NULL);
+      ADDSPR(ani_title_credits, NULL);
     }
-    while (next_spr <= 6) {
+    while (next_spr <= 10) {
       ADDSPR(NULL, NULL);
     }
     #undef ADDSPR
@@ -1757,15 +1966,15 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
         sfx_blip();
       }
     } else if (g_hit & SYS_INPUT_D) {
-      if (menu < (valid_save ? has_file ? 2 : 1 : 0)) {
+      if (menu < (valid_save ? has_file ? 4 : 3 : 2)) {
         menu++;
         sfx_blip();
       }
     } else if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
       if (
         valid_save && (
-        (has_file && menu == 2) ||
-        (!has_file && menu == 1)
+        (has_file && menu == 4) ||
+        (!has_file && menu == 3)
       )) { // delete?
         g_sprites[S_TITLE_START + 0].pc = NULL;
         sfx_accept();
@@ -1786,7 +1995,10 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
         palette_fadetoblack();
         menu = -1;
         break;
-      } else { // new game
+      } else if (
+        (valid_save && menu == (has_file ? 1 : 0)) ||
+        (!valid_save && menu == 0)
+      ) { // new game
         g_sprites[S_TITLE_START + 0].pc = NULL;
         sfx_accept();
         book_award(B_INTRO, 0);
@@ -1798,6 +2010,23 @@ static i32 title_screen() { // -1 = continue, 0-0xff = new game difficulty
           palette_fadetoblack();
           break;
         }
+      } else if (
+        (valid_save && menu == (has_file ? 2 : 1)) ||
+        (!valid_save && menu == 1)
+      ) { // tutorial
+        sfx_accept();
+        menu = 0x100;
+        palette_fadetoblack();
+        break;
+      } else { // credits
+        sfx_accept();
+        palette_fadetoblack();
+        load_scr2(scr_how3_o);
+        palette_fadefromblack();
+        waitstart();
+        palette_fadetoblack();
+        load_scr(scr_title_o);
+        palette_fadefromblack();
       }
     }
   }
@@ -1830,6 +2059,12 @@ static void move_game_cursor(i32 dx, i32 dy) {
   cursor_to_gamesel();
 }
 
+static inline u8 spix(i32 x, i32 y) {
+  // read a pixel from sprites_bin
+  const u8 *s = BINADDR(sprites_bin);
+  return s[((x >> 3) + (y >> 3) * 16) * 64 + (x & 7) + (y & 7) * 8];
+}
+
 void gvmain() {
   sys_init();
   saveroot.books = RESET_BOOKS;
@@ -1845,18 +2080,30 @@ void gvmain() {
   sys_copy_tiles(4, 0, BINADDR(sprites_bin), BINSIZE(sprites_bin));
   gfx_showscreen(true);
   palette_white(0);
+  bool tutorial;
+  bool tutnext;
+  i32 tutstep;
   i32 load;
 start_title:
   g_time = false;
   play_song(SONG_TITLE, false);
   load = title_screen();
 start_game:
+  tutorial = load == 0x100;
+  tutstep = -1;
+  tutnext = tutorial;
   g_time = false;
+  if (tutorial) g_cheat = false;
   if (load >= 0) {
-    load_level(load, rnd32(&g_rnd));
+    if (tutorial) {
+      load_tutorial();
+    } else {
+      load_level(load, rnd32(&g_rnd));
+    }
   }
   g_showing_levelup = false;
   draw_level();
+  if (tutorial) cursor_hide();
   play_song(SONG_MAIN, false);
   palette_fadefromblack();
 
@@ -1880,9 +2127,17 @@ start_game:
   i32 next_tile_update = 5;
   i32 hint_cooldown = 0;
   i32 hint_cooldown_max = 15;
+  i32 tut_cooldown = 0;
   g_time = true;
   for (;;) {
     if (levelup_cooldown > 0) levelup_cooldown--;
+    if (tut_cooldown > 0) {
+      tut_cooldown--;
+      if (!tut_cooldown && TU_GETZ(tutorial_steps[tutstep].wait) == 5) {
+        // advance after waiting
+        tutnext = true;
+      }
+    }
     if (next_tile_update > 0) {
       next_tile_update--;
       if (next_tile_update == 0) {
@@ -1893,6 +2148,129 @@ start_game:
       }
     }
     nextframe();
+
+    if (tutnext) {
+      tutnext = false;
+      tutstep++;
+      tut_cooldown = 30;
+      if (TU_GETZ(tutorial_steps[tutstep].wait) == 5) { // TU_WAIT_TIME
+        tut_cooldown = 30 + 5 * TU_GETX(tutorial_steps[tutstep].wait);
+      }
+      // draw next tutorial screen
+      const char *text = tutorial_steps[tutstep].text;
+      if (text == NULL) {
+        // tutorial is over
+        tutorial = false;
+        game->win = 2;
+        palette_fadetowhite();
+        g_sprites[S_POPUP].pc = NULL;
+        g_sprites[S_POPUPCUR].pc = NULL;
+        for (i32 king = 0; king < 4; king++) {
+          g_sprites[S_KING1_BODY + king].pc = NULL;
+        }
+        goto start_title;
+      } else if (text != TU_TEXT_SAME && text[0] != 0) {
+        // draw the popup
+        i32 lines = 1;
+        for (i32 i = 0; text[i]; i++) {
+          if (text[i] == '\n') lines++;
+        }
+        i32 pad = 4;
+        i32 height = pad * 2 + lines * 9;
+        static u8 popup[64 * 64];
+
+        // draw background
+        for (i32 y = 0; y < 64; y++) {
+          for (i32 x = 0; x < 64; x++) {
+            u8 c = 0;
+            if (y < height) {
+              if (y < 8) {
+                c = spix(x, 128 + y);
+              } else if (y >= height - 8) {
+                c = spix(x, 144 + y - (height - 8));
+              } else {
+                c = spix(x, 137);
+              }
+            }
+            popup[x + y * 64] = c;
+          }
+        }
+
+        // draw chars
+        i32 cx = 4;
+        i32 cy = pad;
+        for (i32 i = 0; text[i]; i++) {
+          if (text[i] <= 32) {
+            if (text[i] == '\n') {
+              cx = 4;
+              cy += 9;
+            } else if (text[i] <= 9) {
+              cx += text[i];
+            } else if (text[i] == ' ') {
+              cx += 4;
+            }
+          } else {
+            u16 ch = tutorial_chars[text[i] - 32];
+            u16 sx = TU_GETX(ch);
+            u16 sy = TU_GETY(ch);
+            u16 sw = TU_GETZ(ch);
+            i32 offset =
+              text[i] == 'g' ||
+              text[i] == 'j' ||
+              text[i] == 'p' ||
+              text[i] == 'q' ||
+              text[i] == 'y'
+              ? 1 : 0;
+            cy += offset;
+            for (i32 py = 0; py < 8; py++) {
+              for (i32 px = 0; px < sw; px++) {
+                popup[cx + px + (cy + py) * 64] =
+                  spix(sx + px, 152 + 8 * sy + py);
+              }
+            }
+            cy -= offset;
+            cx += sw + 1;
+          }
+        }
+
+        // copy popup to VRAM
+        for (i32 ty = 0; ty < 8; ty++) {
+          for (i32 tx = 0; tx < 8; tx++) {
+            for (i32 y = 0; y < 8; y++) {
+              u32 *here = ((void *)popup) + tx * 8 + (ty * 8 + y) * 64;
+              sys_copy64_tiles(4, 16384 + (tx + ty * 16) * 64 + y * 8, here[0], here[1]);
+            }
+          }
+        }
+
+        g_sprites[S_POPUP].pc = ani_popup;
+        g_sprites[S_POPUP].origin.x = TU_GETX(tutorial_steps[tutstep].wait) * 4;
+        g_sprites[S_POPUP].origin.y = TU_GETY(tutorial_steps[tutstep].wait) * 4;
+      }
+      if (
+        !text ||
+        TU_GETZ(tutorial_steps[tutstep].wait) == 0 || // TU_WAIT_NEXT
+        TU_GETZ(tutorial_steps[tutstep].wait) == 5    // TU_WAIT_TIME
+      ) {
+        cursor_hide();
+      } else {
+        cursor_show();
+      }
+      i16 arrow = tutorial_steps[tutstep].arrow;
+      if (arrow == -1) {
+        g_sprites[S_POPUPCUR].pc = NULL;
+      } else if (arrow >= 0) {
+        g_sprites[S_POPUPCUR].pc = ani_tutarrow;
+        g_sprites[S_POPUPCUR].origin.x = TU_GETX(arrow) * 16 + 8;
+        g_sprites[S_POPUPCUR].origin.y = TU_GETY(arrow) * 16 + 3;
+      }
+    }
+
+    bool stopmove = tutorial && (
+      TU_GETZ(tutorial_steps[tutstep].wait) == 0 ||
+      TU_GETZ(tutorial_steps[tutstep].wait) == 5
+    );
+
     if (game->win) {
       // dead or won
       if ((g_hit & SYS_INPUT_A) || (g_hit & SYS_INPUT_ST)) {
@@ -1954,15 +2332,29 @@ start_game:
         set_peek(!!(g_down & SYS_INPUT_ZR));
       }
       if (g_hit & SYS_INPUT_U) {
-        move_game_cursor(0, -1);
+        if (!stopmove) move_game_cursor(0, -1);
       } else if (g_hit & SYS_INPUT_R) {
-        move_game_cursor(1, 0);
+        if (!stopmove) move_game_cursor(1, 0);
       } else if (g_hit & SYS_INPUT_D) {
-        move_game_cursor(0, 1);
+        if (!stopmove) move_game_cursor(0, 1);
       } else if (g_hit & SYS_INPUT_L) {
-        move_game_cursor(-1, 0);
+        if (!stopmove) move_game_cursor(-1, 0);
       } else if (g_hit & SYS_INPUT_SE) {
-        if (!(game->difficulty & D_ONLYMINES) && !levelup_cooldown) {
+        if (tutorial) {
+          if (!tut_cooldown) {
+            if (TU_GETZ(tutorial_steps[tutstep].wait) == 4) { // TU_WAIT_SE
+              if (game_levelup(game, handler)) {
+                levelup_cooldown = 45;
+                sfx_levelup();
+                tutnext = true;
+              } else {
+                sfx_bump();
+              }
+            } else {
+              sfx_bump();
+            }
+          }
+        } else if (!(game->difficulty & D_ONLYMINES) && !levelup_cooldown) {
           if (game_levelup(game, handler)) {
             levelup_cooldown = 45;
             sfx_levelup();
@@ -1971,53 +2363,122 @@ start_game:
           }
         }
       } else if (g_hit & SYS_INPUT_B) {
-        u32 k = game->selx + game->sely * BOARD_W;
-        if (GET_STATUS(game->board[k]) == S_HIDDEN) {
-          i32 k = game->selx + game->sely * BOARD_W;
-          i32 r = game->notes[k] == -2 ? 15 : 14; // toggle mine/blank
-          if (!(game->difficulty & D_ONLYMINES)) {
-            r = note_menu();
-          }
-          if (r >= 0) {
-            i8 v;
-            if (r < 13) {
-              v = r + 1;
-            } else if (r == 13) { // question mark
-              v = -1;
-            } else if (r == 14) { // mine
-              v = -2;
-            } else { // r == 15, blank
-              v = -3;
-            }
-            game_note(game, handler, v);
-          }
-        } else {
+        if (tutorial && !((
+          TU_GETZ(tutorial_steps[tutstep].wait) == 2 || // TU_WAIT_BMINE
+          TU_GETZ(tutorial_steps[tutstep].wait) == 3    // TU_WAIT_BNUM2
+        ) && (
+          TU_GETX(tutorial_steps[tutstep].arrow) == game->selx &&
+          TU_GETY(tutorial_steps[tutstep].arrow) == game->sely
+        ))) {
           sfx_bump();
+        } else {
+          u32 k = game->selx + game->sely * BOARD_W;
+          if (GET_STATUS(game->board[k]) == S_HIDDEN) {
+            i32 k = game->selx + game->sely * BOARD_W;
+            i32 r = game->notes[k] == -2 ? 15 : 14; // toggle mine/blank
+            if (!(game->difficulty & D_ONLYMINES)) {
+              r = note_menu();
+            }
+            if (r >= 0) {
+              i8 v;
+              if (r < 13) {
+                v = r + 1;
+              } else if (r == 13) { // question mark
+                v = -1;
+              } else if (r == 14) { // mine
+                v = -2;
+              } else { // r == 15, blank
+                v = -3;
+              }
+              if (tutorial) {
+                if (
+                  (TU_GETZ(tutorial_steps[tutstep].wait) == 2 && v == -2) ||
+                  (TU_GETZ(tutorial_steps[tutstep].wait) == 3 && v == 2)
+                ) {
+                  sfx_accept();
+                  game_note(game, handler, v);
+                  tutnext = true;
+                } else {
+                  sfx_bump();
+                  // restore tutorial popup
+                  tutstep--;
+                  tutnext = true;
+                }
+              } else {
+                sfx_accept();
+                game_note(game, handler, v);
+              }
+            } else if (tutorial) {
+              // restore tutorial popup
+              tutstep--;
+              tutnext = true;
+            }
+          } else {
+            sfx_bump();
+          }
         }
       } else if (g_hit & SYS_INPUT_A) {
-        if (!game_click(game, handler)) {
+        if (tutorial) {
+          if (!tut_cooldown) {
+            u16 wait = tutorial_steps[tutstep].wait;
+            if (TU_GETZ(wait) == 0) { // TU_WAIT_NEXT
+              tutnext = true;
+              sfx_accept();
+            } else if (
+              TU_GETZ(wait) == 1 && // TU_WAIT_A
+              TU_GETX(tutorial_steps[tutstep].arrow) == game->selx &&
+              TU_GETY(tutorial_steps[tutstep].arrow) == game->sely
+            ) {
+              game_click(game, handler);
+              tutnext = true;
+            } else {
+              sfx_bump();
+            }
+          }
+        } else if (!game_click(game, handler)) {
           sfx_bump();
         }
       } else if (g_hit & SYS_INPUT_ST) {
         g_time = false;
         set_peek(false);
-        i32 p = pause_menu();
-        if (p >= 0 && p < 0x100) {
-          // new game
-          palette_fadetoblack();
-          load = p;
-          goto start_game;
-        } else if (p == 0x100) {
-          // save+quit
-          palette_fadetowhite();
-          save_savecopy(false);
-          for (i32 king = 0; king < 4; king++) {
-            g_sprites[S_KING1_BODY + king].pc = NULL;
+        if (tutorial) {
+          if (TU_GETZ(tutorial_steps[tutstep].wait) == 4) { // TU_WAIT_SE
+            sfx_bump();
+          } else {
+            // quit tutorial
+            tutorial = false;
+            game->win = 2;
+            sfx_reject();
+            palette_fadetowhite();
+            g_sprites[S_POPUP].pc = NULL;
+            g_sprites[S_POPUPCUR].pc = NULL;
+            for (i32 king = 0; king < 4; king++) {
+              g_sprites[S_KING1_BODY + king].pc = NULL;
+            }
+            goto start_title;
           }
-          goto start_title;
+        } else {
+          i32 p = pause_menu();
+          if (p >= 0 && p < 0x100) {
+            // new game
+            palette_fadetoblack();
+            load = p;
+            goto start_game;
+          } else if (p == 0x100) {
+            // save+quit
+            palette_fadetowhite();
+            save_savecopy(false);
+            for (i32 king = 0; king < 4; king++) {
+              g_sprites[S_KING1_BODY + king].pc = NULL;
+            }
+            goto start_title;
+          }
+          g_time = true;
         }
-        g_time = true;
       }
+    }
+    if (tutnext && tutorial_steps[tutstep + 1].text != TU_TEXT_SAME) {
+      g_sprites[S_POPUP].pc = NULL;
     }
   }
 }
@@ -2141,7 +2602,6 @@ static i32 book_info(enum book_enum book, enum book_info_action action) {
           book_scr(scr_how1_o);
           sfx_book();
           book_scr(scr_how2_o);
-          book_scr(scr_how3_o);
           book_click_end();
           return 0;
       }

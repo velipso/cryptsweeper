@@ -46,7 +46,7 @@ entrypoint:
     .fill   9, 1, 0
 
     // version
-    .byte   0
+    .byte   1
 
     // complement check (fixed via xform)
     .byte   0

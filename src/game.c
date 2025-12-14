@@ -199,7 +199,7 @@ bool game_click(struct game_st *game, game_handler_f handler) {
   u32 k = game->selx + game->sely * BOARD_W;
   if (game->difficulty & D_ONLYMINES) {
     if (GET_STATUS(game->board[k]) != S_PRESSED) {
-      if (game->notes[k] == -2) {
+      if (GET_STATUS(game->board[k]) == S_HIDDEN && game->notes[k] == -2) {
         // can't click on flagged mines
         return false;
       } else {
@@ -213,7 +213,7 @@ bool game_click(struct game_st *game, game_handler_f handler) {
       }
       result = tile_info(game, handler, game->board[k], TI_COLLECT) == 0;
     } else {
-      if (game->notes[k] == -2) {
+      if (GET_STATUS(game->board[k]) == S_HIDDEN && game->notes[k] == -2) {
         // can't click on flagged mines
         return false;
       }
